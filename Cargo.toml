@@ -1,6 +1,37 @@
 [package]
-name = "rseqeval"
+name = "rusev"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license-file.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[workspace]
+members = [".", "rusev_macro"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
+authors = ["Simon Théorêt <simonteoret@hotmail.com"] 
+description = "Fast implementation of SeqEval, a sequence evaluation framework"
+license-file = "UNLICENCE"
+repository = "https://github.com/SimonTheoret/rusev"
+keywords = ["Machine Learning", "SeqEval", "Sequence Evaluation", "NLP", "Evaluation"]
+categories = ["science", "text-processing", "mathematics"]
+
+[lib]
+# path = "src/lib.rs"
 
 [dependencies]
+unicode-segmentation = "1.12.0"
+rusev_macro = {path = "./rusev_macro"}
+ndarray = { version = "0.16.1", features = ["serde", "rayon", "blas"] }
+num = "0.4.3"
+ahash = "0.8.11"
+ndarray-stats = "0.6.0"
+
+[dev-dependencies]
+parameterized = "2.0.0"
+# unicode-segmentation = "1.12.0"
