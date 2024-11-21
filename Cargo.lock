@@ -393,6 +393,7 @@ name = "rusev"
 version = "0.1.0"
 dependencies = [
  "ahash",
+ "itertools",
  "ndarray",
  "ndarray-stats",
  "num",

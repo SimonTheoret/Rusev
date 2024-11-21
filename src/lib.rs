@@ -34,7 +34,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 mod metrics;
 
-pub use metrics::{precision_recall_fscore_support, ComputationError};
+pub use metrics::{classification_report, precision_recall_fscore_support, ComputationError};
 
 /// An entity represent a named objet in named entity recognition (NER). It contains a start and an
 /// end(i.e. at what index of the list does it starts and ends) and a tag, which the associated
@@ -934,6 +934,13 @@ impl<'a> Entities<'a> {
 
     pub fn unique_tags(&self) -> AHashSet<&str> {
         AHashSet::from_iter(self.iter().flat_map(|v| v.iter()).map(|e| e.tag.borrow()))
+    }
+    pub fn unique_tags_owned(&self) -> AHashSet<String> {
+        AHashSet::from_iter(
+            self.iter()
+                .flat_map(|v| v.iter())
+                .map(|e| e.tag.clone().into_owned()),
+        )
     }
 }
 

@@ -1,14 +1,28 @@
 use crate::{ConversionError, Entities, SchemeType, TryFromVec};
 use core::fmt;
+use itertools::multizip;
 use ndarray::{prelude::*, Array, ScalarOperand};
 use ndarray_stats::{errors::MultiInputError, SummaryStatisticsExt};
 use num::{Float, Integer, Num, NumCast};
+use std::collections::{BTreeSet, HashMap};
 use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use std::sync::OnceLock;
 
 const WARN_FOR: [Metric; 3] = [Metric::Precision, Metric::Recall, Metric::FScore];
+
+#[derive(Debug, PartialEq, Hash, Clone, Copy)]
+enum Metric {
+    FScore,
+    Precision,
+    Recall,
+}
+impl Display for Metric {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum DivisionByZeroStrategy {
@@ -59,6 +73,7 @@ impl Display for DivisionByZeroError {
 
 impl Error for DivisionByZeroError {}
 
+#[derive(Debug, Hash, PartialEq, Copy, Clone)]
 pub enum Average {
     None,
     Micro,
@@ -158,21 +173,22 @@ fn extract_tp_actual_correct<'a>(
     scheme: SchemeType,
     suffix: bool,
     delimiter: char,
-    entities_true: Option<Entities<'a>>,
-    entities_pred: Option<Entities<'a>>,
+    entities_true: Option<&Entities<'a>>,
+    entities_pred: Option<&Entities<'a>>,
 ) -> Result<ActualTPCorrect<usize>, ComputationError<&'a str>> {
     let entities_true_res = match entities_true {
         Some(e) => e,
-        None => Entities::try_from_vecs(y_true, scheme, suffix, delimiter, None)?,
+        None => &Entities::try_from_vecs(y_true, scheme, suffix, delimiter, None)?,
     };
     let entities_pred_res = match entities_pred {
         Some(e) => e,
-        None => Entities::try_from_vecs(y_pred, scheme, suffix, delimiter, None)?,
+        None => &Entities::try_from_vecs(y_pred, scheme, suffix, delimiter, None)?,
     };
     let entities_pred_unique_tags = entities_pred_res.unique_tags();
     let entities_true_unique_tags = entities_true_res.unique_tags();
 
     let target_names = entities_pred_unique_tags.union(&entities_true_unique_tags);
+    //TODO: This should be a for loop to avoid cloning target_names all over the place
     let pred_sum: Array1<usize> = Array::from_iter(
         target_names
             .clone()
@@ -243,7 +259,7 @@ type PrecisionRecallFScoreTrueSum = (
     Array<f32, Dim<[usize; 1]>>,
     Array<f32, Dim<[usize; 1]>>,
     Array<f32, Dim<[usize; 1]>>,
-    usize,
+    Array<usize, Dim<[usize; 1]>>,
 );
 
 /// Main entrypoint of the Rusev library. This function computes the precision, recall, fscore and
@@ -262,26 +278,24 @@ type PrecisionRecallFScoreTrueSum = (
 /// * `parallel`: Can we use parallelism for computations?
 /// * `entities_true`: Optional entities used to reduce the computation load.
 /// * `entities_pred`: Optional entities used to reduce the computation load.
-pub fn precision_recall_fscore_support<'a, F: FloatExt, I: IntExt>(
+pub fn precision_recall_fscore_support<'a, F: FloatExt>(
     y_true: Vec<Vec<&'a str>>,
     y_pred: Vec<Vec<&'a str>>,
     beta: F,
     average: Average,
-    sample_weight: Option<Array<f32, Dim<[usize; 1]>>>,
+    sample_weight: Option<ArcArray<f32, Dim<[usize; 1]>>>,
     zero_division: DivisionByZeroStrategy,
     scheme: SchemeType,
     suffix: bool,
     delimiter: char,
     parallel: bool,
-    entities_true: Option<Entities<'a>>,
-    entities_pred: Option<Entities<'a>>,
+    entities_true: Option<&Entities<'a>>,
+    entities_pred: Option<&Entities<'a>>,
 ) -> Result<PrecisionRecallFScoreTrueSum, ComputationError<&'a str>> {
     if beta.is_sign_negative() {
         return Err(ComputationError::BetaNotPositive);
     };
-    if let Result::Err(e) = check_consistent_length(&y_true, &y_pred) {
-        return Err(ComputationError::InconsistentLenght(e));
-    };
+    check_consistent_length(&y_true, &y_pred)?;
     let (mut pred_sum, mut tp_sum, mut true_sum) = extract_tp_actual_correct(
         y_true,
         y_pred,
@@ -345,7 +359,7 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt, I: IntExt>(
                             precision.to_owned(),
                             recall.to_owned(),
                             f_score.to_owned(),
-                            0,
+                            array![0],
                         ))
                     }
                 }
@@ -356,7 +370,7 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt, I: IntExt>(
             let final_recall = Array::from_vec(vec![recall.weighted_mean(&final_tmp_weights)?]);
             let final_f_score = Array::from_vec(vec![f_score.weighted_mean(&final_tmp_weights)?]);
             // let final_true_sum = Array::from_vec(vec![true_sum.sum()]);
-            let final_true_sum = tmp_weights.sum();
+            let final_true_sum = array![tmp_weights.sum()];
             Ok((final_precision, final_recall, final_f_score, final_true_sum))
         }
         Average::Samples => {
@@ -367,8 +381,20 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt, I: IntExt>(
                 Array::from_vec(vec![precision.weighted_mean(&final_tmp_weights)?]);
             let final_recall = Array::from_vec(vec![recall.weighted_mean(&final_tmp_weights)?]);
             let final_f_score = Array::from_vec(vec![f_score.weighted_mean(&final_tmp_weights)?]);
-            let final_true_sum = true_sum.sum();
+            let final_true_sum = array![true_sum.sum()];
             Ok((final_precision, final_recall, final_f_score, final_true_sum))
+        }
+        Average::None => {
+            let final_precision = Array::from_vec(vec![precision.mean().ok_or_else(|| {
+                ComputationError::EmptyArray(String::from("precision array was empty"))
+            })?]);
+            let final_recall = Array::from_vec(vec![recall.mean().ok_or_else(|| {
+                ComputationError::EmptyArray(String::from("precision array was empty"))
+            })?]);
+            let final_f_score = Array::from_vec(vec![f_score.mean().ok_or_else(|| {
+                ComputationError::EmptyArray(String::from("precision array was empty"))
+            })?]);
+            Ok((final_precision, final_recall, final_f_score, true_sum))
         }
         _ => {
             let final_precision = Array::from_vec(vec![precision.mean().ok_or_else(|| {
@@ -380,19 +406,39 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt, I: IntExt>(
             let final_f_score = Array::from_vec(vec![f_score.mean().ok_or_else(|| {
                 ComputationError::EmptyArray(String::from("precision array was empty"))
             })?]);
-            let final_true_sum = true_sum.sum();
+            let final_true_sum = array![true_sum.sum()];
             Ok((final_precision, final_recall, final_f_score, final_true_sum))
         }
     }
 }
+// # Average the results
+// if average == "weighted":
+//     weights = true_sum
+//     if weights.sum() == 0:
+//         zero_division_value = 0.0 if zero_division in ["warn", 0] else 1.0
+//         # precision is zero_division if there are no positive predictions
+//         # recall is zero_division if there are no positive labels
+//         # fscore is zero_division if all labels AND predictions are
+//         # negative
+//         return (
+//             zero_division_value if pred_sum.sum() == 0 else 0.0,
+//             zero_division_value,
+//             zero_division_value if pred_sum.sum() == 0 else 0.0,
+//             sum(true_sum),
+//         )
 
-//     if average is not None:
-//         precision = np.average(precision, weights=weights)
-//         recall = np.average(recall, weights=weights)
-//         f_score = np.average(f_score, weights=weights)
-//         true_sum = sum(true_sum)
+// elif average == "samples":
+//     weights = sample_weight
+// else:
+//     weights = None
 
-//     return precision, recall, f_score, true_sum
+// if average is not None:
+//     precision = np.average(precision, weights=weights)
+//     recall = np.average(recall, weights=weights)
+//     f_score = np.average(f_score, weights=weights)
+//     true_sum = sum(true_sum)
+
+// return precision, recall, f_score, true_sum
 
 type Found0InDenominator = bool;
 
@@ -463,17 +509,93 @@ fn par_replace<Data: PartialEq + Send + Sync + Copy, D: Dimension>(
     array
 }
 
-#[derive(Debug, PartialEq, Hash, Clone, Copy)]
-enum Metric {
-    FScore,
-    Precision,
-    Recall,
+pub struct ClassReportedMetrics {
+    pub precision: f32,
+    pub recall: f32,
+    pub fscore: f32,
+    pub support: usize,
+    pub average: Average,
 }
-impl Display for Metric {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+
+impl From<ClassReportedMetrics> for (f32, f32, f32) {
+    fn from(value: ClassReportedMetrics) -> Self {
+        (value.precision, value.recall, value.fscore)
     }
 }
+
+type ReportsWithAverage<'a> = HashMap<Average, HashMap<&'a str, ClassReportedMetrics>>;
+
+pub fn classification_report<'a>(
+    y_true: Vec<Vec<&'a str>>,
+    y_pred: Vec<Vec<&'a str>>,
+    sample_weight: Option<ArcArray<f32, Dim<[usize; 1]>>>,
+    zero_division: DivisionByZeroStrategy,
+    scheme: SchemeType,
+    suffix: bool,
+    delimiter: char,
+    parallel: bool,
+) -> Result<ReportsWithAverage<'a>, ComputationError<&'a str>> {
+    check_consistent_length(y_true.as_ref(), y_pred.as_ref())?;
+    let entities_true = Entities::try_from_vecs(y_true, scheme, suffix, delimiter, None)?;
+    let entities_pred = Entities::try_from_vecs(y_pred, scheme, suffix, delimiter, None)?;
+    let entities_true_unique_tags = &entities_true.unique_tags();
+    let unsorted_target_names = &entities_pred.unique_tags() | &entities_true_unique_tags;
+    let target_names_sorted_iter = BTreeSet::from_iter(unsorted_target_names); // NOTE: Is it a good idea to convert to BTreeSet? What about a vec? A custom structure?
+    let (p, r, f1, s) = precision_recall_fscore_support::<f32>(
+        vec![vec![]], // We use the entities_pred/true instead of the vecs of tokens
+        vec![vec![]],
+        1.0,
+        Average::None,
+        sample_weight,
+        zero_division,
+        scheme,
+        suffix,
+        delimiter,
+        parallel,
+        Some(&entities_true),
+        Some(&entities_pred),
+    )?;
+    let mut none_reporter: HashMap<&str, ClassReportedMetrics> = HashMap::new();
+    for (name, precision, recall, fscore, support) in
+        multizip((target_names_sorted_iter.iter(), p, r, f1, s))
+    {
+        let tmp_metrics = ClassReportedMetrics {
+            precision,
+            recall,
+            fscore,
+            support,
+            average: Average::None,
+        };
+        none_reporter.insert(name, tmp_metrics);
+        for avg in (Average::Micro, Average::Macro, Average::Weighted){
+            // pre
+        }
+    }
+    todo!()
+}
+
+//     for row in zip(target_names, p, r, f1, s):
+//         reporter.write(*row)
+//     reporter.write_blank()
+
+//     # compute average scores.
+//     average_options = ("micro", "macro", "weighted")
+//     for average in average_options:
+//         avg_p, avg_r, avg_f1, support = precision_recall_fscore_support(
+//             y_true,
+//             y_pred,
+//             average=average,
+//             sample_weight=sample_weight,
+//             zero_division=zero_division,
+//             scheme=scheme,
+//             suffix=suffix,
+//             entities_true=entities_true,
+//             entities_pred=entities_pred,
+//         )
+//         reporter.write("{} avg".format(average), avg_p, avg_r, avg_f1, support)
+//     reporter.write_blank()
+
+//     return reporter.report()
 
 #[cfg(test)]
 mod tests {
@@ -589,7 +711,7 @@ mod tests {
             vec!["O", "O", "B-MISC", "I-MISC", "I-MISC", "I-MISC", "O"],
             vec!["B-PER", "I-PER", "O"],
         ];
-        let (precision, recall, fscore, support) = precision_recall_fscore_support::<f32, usize>(
+        let (precision, recall, fscore, support) = precision_recall_fscore_support::<f32>(
             y_true,
             y_pred,
             1.0,
@@ -610,7 +732,7 @@ mod tests {
                 precision.item().unwrap(),
                 recall.item().unwrap(),
                 fscore.item().unwrap(),
-                support
+                support.item().unwrap()
             )
         );
     }
