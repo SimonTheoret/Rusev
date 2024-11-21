@@ -5,6 +5,7 @@ use ndarray::Data;
 use ndarray::{prelude::*, Array, ScalarOperand};
 use ndarray_stats::{errors::MultiInputError, SummaryStatisticsExt};
 use num::{Float, Integer, Num, NumCast};
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap};
 use std::error::Error;
 use std::fmt::{Debug, Display};
@@ -109,7 +110,7 @@ impl Display for DivisionByZeroError {
 
 impl Error for DivisionByZeroError {}
 
-#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum Average {
     None,
     Micro,
@@ -643,7 +644,7 @@ pub fn classification_report<'a>(
             average: avg,
         };
         // avg_reporter
-        main_reporter.insert(k, v)
+        main_reporter.insert(k, v);
     }
     todo!()
 }

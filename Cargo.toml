@@ -32,6 +32,7 @@ num = "0.4.3"
 ahash = "0.8.11"
 ndarray-stats = "0.6.0"
 itertools = "0.13.0"
+serde = { version = "1.0.215", features = ["derive"] }
 
 [dev-dependencies]
 parameterized = "2.0.0"
