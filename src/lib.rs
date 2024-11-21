@@ -33,6 +33,7 @@ use std::{borrow::Cow, cell::RefCell};
 use unicode_segmentation::UnicodeSegmentation;
 
 mod metrics;
+mod reporter;
 
 pub use metrics::{classification_report, precision_recall_fscore_support, ComputationError};
 

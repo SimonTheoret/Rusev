@@ -1,6 +1,7 @@
 use crate::{ConversionError, Entities, SchemeType, TryFromVec};
 use core::fmt;
 use itertools::multizip;
+use ndarray::Data;
 use ndarray::{prelude::*, Array, ScalarOperand};
 use ndarray_stats::{errors::MultiInputError, SummaryStatisticsExt};
 use num::{Float, Integer, Num, NumCast};
@@ -12,6 +13,41 @@ use std::sync::OnceLock;
 
 const WARN_FOR: [Metric; 3] = [Metric::Precision, Metric::Recall, Metric::FScore];
 
+#[derive(Debug, Clone)]
+pub struct ArrayNotUniqueOrEmpty;
+
+impl Display for ArrayNotUniqueOrEmpty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "This array contains more than one element or is empty. Cannot call `item` on it"
+        )
+    }
+}
+
+trait ItemArrayExt<Output> {
+    /// Returns the element out of the Array. Can return an error if the array is empty of if the
+    /// array has a length superior to 1.
+    fn item(&self) -> Result<Output, ArrayNotUniqueOrEmpty> {
+        match self.verify_length() {
+            1 => Ok(self.get_first()),
+            _ => Err(ArrayNotUniqueOrEmpty),
+        }
+    }
+    /// Verifies the length of the array;
+    fn verify_length(&self) -> usize;
+    /// Gets the first element of the array
+    fn get_first(&self) -> Output;
+}
+
+impl<F: Clone, T: Data<Elem = F>> ItemArrayExt<F> for ArrayBase<T, Dim<[usize; 1]>> {
+    fn verify_length(&self) -> usize {
+        self.len()
+    }
+    fn get_first(&self) -> F {
+        self.first().unwrap().clone()
+    }
+}
 #[derive(Debug, PartialEq, Hash, Clone, Copy)]
 enum Metric {
     FScore,
@@ -73,13 +109,18 @@ impl Display for DivisionByZeroError {
 
 impl Error for DivisionByZeroError {}
 
-#[derive(Debug, Hash, PartialEq, Copy, Clone)]
+#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
 pub enum Average {
     None,
     Micro,
     Macro,
     Weighted,
     Samples,
+}
+impl Display for Average {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 /// Internal extension trait for Num's Float trait
@@ -217,6 +258,7 @@ pub enum ComputationError<S: AsRef<str> + std::fmt::Debug> {
     NoSampleWeight,
     InputError(MultiInputError),
     EmptyArray(String),
+    EmptyOrNotUnique(ArrayNotUniqueOrEmpty),
 }
 impl<S: AsRef<str> + std::fmt::Debug> Display for ComputationError<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -228,6 +270,7 @@ impl<S: AsRef<str> + std::fmt::Debug> Display for ComputationError<S> {
             Self::NoSampleWeight => write!(f, "Using sample weighting and no sample weight given"),
             Self::InputError(input_err) => std::fmt::Display::fmt(&input_err, f),
             Self::EmptyArray(empty_err) => write!(f, "Found an empty array in {}", empty_err),
+            Self::EmptyOrNotUnique(size_err) => std::fmt::Display::fmt(size_err, f),
         }
     }
 }
@@ -252,6 +295,12 @@ impl<S: AsRef<str> + std::fmt::Debug> From<DivisionByZeroError> for ComputationE
 impl<S: AsRef<str> + std::fmt::Debug> From<MultiInputError> for ComputationError<S> {
     fn from(value: MultiInputError) -> Self {
         Self::InputError(value)
+    }
+}
+
+impl<S: AsRef<str> + std::fmt::Debug> From<ArrayNotUniqueOrEmpty> for ComputationError<S> {
+    fn from(value: ArrayNotUniqueOrEmpty) -> Self {
+        Self::EmptyOrNotUnique(value)
     }
 }
 
@@ -546,7 +595,7 @@ pub fn classification_report<'a>(
         vec![vec![]],
         1.0,
         Average::None,
-        sample_weight,
+        sample_weight.clone(),
         zero_division,
         scheme,
         suffix,
@@ -555,6 +604,7 @@ pub fn classification_report<'a>(
         Some(&entities_true),
         Some(&entities_pred),
     )?;
+    let mut main_reporter: ReportsWithAverage = HashMap::new();
     let mut none_reporter: HashMap<&str, ClassReportedMetrics> = HashMap::new();
     for (name, precision, recall, fscore, support) in
         multizip((target_names_sorted_iter.iter(), p, r, f1, s))
@@ -567,18 +617,37 @@ pub fn classification_report<'a>(
             average: Average::None,
         };
         none_reporter.insert(name, tmp_metrics);
-        for avg in (Average::Micro, Average::Macro, Average::Weighted){
-            // pre
-        }
+    }
+    main_reporter.insert(Average::None, none_reporter);
+    for avg in [Average::Micro, Average::Macro, Average::Weighted].into_iter() {
+        let avg_reporter: HashMap<&str, ClassReportedMetrics> = HashMap::new();
+        let (p, r, f1, s) = precision_recall_fscore_support::<f32>(
+            vec![vec![]], // We use the entities_pred/true instead of the vecs of tokens
+            vec![vec![]],
+            1.0,
+            Average::None,
+            sample_weight.clone(),
+            zero_division,
+            scheme,
+            suffix,
+            delimiter,
+            parallel,
+            Some(&entities_true),
+            Some(&entities_pred),
+        )?;
+        let tmp_metrics = ClassReportedMetrics {
+            precision: p.item()?,
+            recall: r.item()?,
+            fscore: f1.item()?,
+            support: s.item()?,
+            average: avg,
+        };
+        // avg_reporter
+        main_reporter.insert(k, v)
     }
     todo!()
 }
 
-//     for row in zip(target_names, p, r, f1, s):
-//         reporter.write(*row)
-//     reporter.write_blank()
-
-//     # compute average scores.
 //     average_options = ("micro", "macro", "weighted")
 //     for average in average_options:
 //         avg_p, avg_r, avg_f1, support = precision_recall_fscore_support(
@@ -600,43 +669,6 @@ pub fn classification_report<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::Data;
-
-    #[derive(Debug, Clone)]
-    struct ElementNotUniqueOrEmpty;
-
-    impl Display for ElementNotUniqueOrEmpty {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(
-                f,
-                "This array contains more than one element or is empty. Cannot call `item` on it"
-            )
-        }
-    }
-
-    trait ItemArrayExt<Output> {
-        /// Returns the element out of the Array. Can return an error if the array is empty of if the
-        /// array has a length superior to 1.
-        fn item(&self) -> Result<Output, ElementNotUniqueOrEmpty> {
-            match self.verify_length() {
-                1 => Ok(self.get_first()),
-                _ => Err(ElementNotUniqueOrEmpty),
-            }
-        }
-        /// Verifies the length of the array;
-        fn verify_length(&self) -> usize;
-        /// Gets the first element of the array
-        fn get_first(&self) -> Output;
-    }
-
-    impl<F: Clone, T: Data<Elem = F>> ItemArrayExt<F> for ArrayBase<T, Dim<[usize; 1]>> {
-        fn verify_length(&self) -> usize {
-            self.len()
-        }
-        fn get_first(&self) -> F {
-            self.first().unwrap().clone()
-        }
-    }
 
     #[test]
     fn test_par_divide_results_and_mask() {
