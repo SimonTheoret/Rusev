@@ -1,12 +1,14 @@
+use crate::reporter::{ClassMetrics, Reporter};
 use crate::{ConversionError, Entities, SchemeType, TryFromVec};
 use core::fmt;
+use enum_iterator::Sequence;
 use itertools::multizip;
 use ndarray::Data;
 use ndarray::{prelude::*, Array, ScalarOperand};
 use ndarray_stats::{errors::MultiInputError, SummaryStatisticsExt};
 use num::{Float, Integer, Num, NumCast};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
@@ -15,38 +17,46 @@ use std::sync::OnceLock;
 const WARN_FOR: [Metric; 3] = [Metric::Precision, Metric::Recall, Metric::FScore];
 
 #[derive(Debug, Clone)]
-pub struct ArrayNotUniqueOrEmpty;
+pub struct ArrayNotUniqueOrEmpty(usize);
 
 impl Display for ArrayNotUniqueOrEmpty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "This array contains more than one element or is empty. Cannot call `item` on it"
+            "This array contains more than one element or is empty. It has length: {} Cannot call `item` on it", self.0
         )
     }
 }
+impl Error for ArrayNotUniqueOrEmpty {}
 
 trait ItemArrayExt<Output> {
     /// Returns the element out of the Array. Can return an error if the array is empty of if the
     /// array has a length superior to 1.
     fn item(&self) -> Result<Output, ArrayNotUniqueOrEmpty> {
-        match self.verify_length() {
+        match self.length() {
             1 => Ok(self.get_first()),
-            _ => Err(ArrayNotUniqueOrEmpty),
+            n => Err(ArrayNotUniqueOrEmpty(n)),
         }
     }
-    /// Verifies the length of the array;
-    fn verify_length(&self) -> usize;
+    /// Returns the length of the array;
+    fn length(&self) -> usize;
     /// Gets the first element of the array
     fn get_first(&self) -> Output;
 }
 
 impl<F: Clone, T: Data<Elem = F>> ItemArrayExt<F> for ArrayBase<T, Dim<[usize; 1]>> {
-    fn verify_length(&self) -> usize {
+    fn length(&self) -> usize {
         self.len()
     }
     fn get_first(&self) -> F {
         self.first().unwrap().clone()
+    }
+
+    fn item(&self) -> Result<F, ArrayNotUniqueOrEmpty> {
+        match self.length() {
+            1 => Ok(self.get_first()),
+            n => Err(ArrayNotUniqueOrEmpty(n)),
+        }
     }
 }
 #[derive(Debug, PartialEq, Hash, Clone, Copy)]
@@ -110,7 +120,7 @@ impl Display for DivisionByZeroError {
 
 impl Error for DivisionByZeroError {}
 
-#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, Serialize, Deserialize, Sequence)]
 pub enum Average {
     None,
     Micro,
@@ -124,15 +134,40 @@ impl Display for Average {
     }
 }
 
+/// Average implements partial ordering. This is used during the
+/// reporting to represent the ClassMetrics with an `average` other
+/// than `None` as `Greater` than those with `None`.
+impl PartialOrd for Average {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (Self::None, _) => Some(std::cmp::Ordering::Less),
+            (_, Self::None) => Some(std::cmp::Ordering::Greater),
+            _ => Some(std::cmp::Ordering::Equal),
+        }
+    }
+}
+
+impl Average {
+    pub(crate) const ALL_AVERAGES_STRINGS: [&'static str; 5] =
+        ["None", "Micro", "Macro", "Weighted", "Samples"];
+    pub(crate) const OVERALL_PREFIX: &'static str = "Overall";
+    pub(crate) const ALL_SPECIAL_ORDERED_CLASS: [&'static str; 4] = [
+        "Overall_Micro",
+        "Overall_Macro",
+        "Overall_Weighted",
+        "Overall_Samples",
+    ];
+}
+
 /// Internal extension trait for Num's Float trait
 pub trait FloatExt: Float + Send + Sync + Clone + ScalarOperand + Debug {}
 
 impl<T: Float + Send + Sync + Clone + Copy + ScalarOperand + Debug> FloatExt for T {}
 
-/// Internal extension trait for Num's Integer trait
-pub trait IntExt: Integer + Send + Sync + Clone + Copy + ScalarOperand + Debug {}
-
-impl<T: Integer + Send + Sync + Clone + Copy + ScalarOperand + Debug> IntExt for T {}
+// /// Internal extension trait for Num's Integer trait
+// pub trait IntExt: Integer + Send + Sync + Clone + Copy + ScalarOperand + Debug {}
+//
+// impl<T: Integer + Send + Sync + Clone + Copy + ScalarOperand + Debug> IntExt for T {}
 
 fn prf_divide<I: Num + Clone + Send + Sync + Copy, D: Dimension>(
     numerator: ArcArray<I, D>,
@@ -229,20 +264,25 @@ fn extract_tp_actual_correct<'a>(
     let entities_pred_unique_tags = entities_pred_res.unique_tags();
     let entities_true_unique_tags = entities_true_res.unique_tags();
 
-    let target_names = entities_pred_unique_tags.union(&entities_true_unique_tags);
+    let target_names =
+        BTreeSet::from_iter(entities_pred_unique_tags.union(&entities_true_unique_tags));
+
     //TODO: This should be a for loop to avoid cloning target_names all over the place
     let pred_sum: Array1<usize> = Array::from_iter(
         target_names
             .clone()
+            .into_iter()
             .map(|t| entities_pred_res.filter(*t).len()),
     );
-    let tp_sum: Array1<usize> = Array::from_iter(target_names.clone().map(|t| {
+    let tp_sum: Array1<usize> = Array::from_iter(target_names.clone().into_iter().map(|t| {
         entities_true_res
             .filter(*t)
             .intersection(&entities_pred_res.filter(*t))
             .count()
     }));
-    let test = target_names.map(|t| entities_true_res.filter(*t).len());
+    let test = target_names
+        .into_iter()
+        .map(|t| entities_true_res.filter(*t).len());
     let true_sum: Array1<usize> = Array::from_iter(test);
 
     Ok((pred_sum, tp_sum, true_sum))
@@ -381,20 +421,17 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
     {
         recall.clone()
     } else {
-        let denom =
-            precision.mapv(|x| x as f32).into_shared() + recall.mapv(|x| x as f32).into_shared();
+        let denom = precision.clone() + recall.view();
         let denom_non_zero = if parallel {
             par_replace(denom, 0.0, 1.0)
         } else {
             replace(denom, 0.0, 1.0)
         };
         let beta2p1 = beta2 + F::one();
-        dbg!(beta2p1);
         let beta2p1_cast: f32 = <f64 as NumCast>::from(beta2p1)
             .expect("Casting from f64 to f32 should always be possible")
             as f32;
-        dbg!(beta2p1_cast);
-        beta2p1_cast * precision.clone() * recall.clone() / denom_non_zero
+        beta2p1_cast * precision.clone() * recall.view() / denom_non_zero
     };
     match average {
         Average::Weighted => {
@@ -425,7 +462,7 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
         }
         Average::Samples => {
             let final_tmp_weights = sample_weight
-                .ok_or_else(|| ComputationError::NoSampleWeight)?
+                .ok_or(ComputationError::NoSampleWeight)?
                 .into_shared();
             let final_precision =
                 Array::from_vec(vec![precision.weighted_mean(&final_tmp_weights)?]);
@@ -435,15 +472,9 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
             Ok((final_precision, final_recall, final_f_score, final_true_sum))
         }
         Average::None => {
-            let final_precision = Array::from_vec(vec![precision.mean().ok_or_else(|| {
-                ComputationError::EmptyArray(String::from("precision array was empty"))
-            })?]);
-            let final_recall = Array::from_vec(vec![recall.mean().ok_or_else(|| {
-                ComputationError::EmptyArray(String::from("precision array was empty"))
-            })?]);
-            let final_f_score = Array::from_vec(vec![f_score.mean().ok_or_else(|| {
-                ComputationError::EmptyArray(String::from("precision array was empty"))
-            })?]);
+            let final_precision = precision.into_owned();
+            let final_recall = recall.into_owned();
+            let final_f_score = f_score.into_owned();
             Ok((final_precision, final_recall, final_f_score, true_sum))
         }
         _ => {
@@ -559,22 +590,6 @@ fn par_replace<Data: PartialEq + Send + Sync + Copy, D: Dimension>(
     array
 }
 
-pub struct ClassReportedMetrics {
-    pub precision: f32,
-    pub recall: f32,
-    pub fscore: f32,
-    pub support: usize,
-    pub average: Average,
-}
-
-impl From<ClassReportedMetrics> for (f32, f32, f32) {
-    fn from(value: ClassReportedMetrics) -> Self {
-        (value.precision, value.recall, value.fscore)
-    }
-}
-
-type ReportsWithAverage<'a> = HashMap<Average, HashMap<&'a str, ClassReportedMetrics>>;
-
 pub fn classification_report<'a>(
     y_true: Vec<Vec<&'a str>>,
     y_pred: Vec<Vec<&'a str>>,
@@ -584,19 +599,20 @@ pub fn classification_report<'a>(
     suffix: bool,
     delimiter: char,
     parallel: bool,
-) -> Result<ReportsWithAverage<'a>, ComputationError<&'a str>> {
+) -> Result<Reporter, ComputationError<&'a str>> {
     check_consistent_length(y_true.as_ref(), y_pred.as_ref())?;
     let entities_true = Entities::try_from_vecs(y_true, scheme, suffix, delimiter, None)?;
     let entities_pred = Entities::try_from_vecs(y_pred, scheme, suffix, delimiter, None)?;
     let entities_true_unique_tags = &entities_true.unique_tags();
-    let unsorted_target_names = &entities_pred.unique_tags() | &entities_true_unique_tags;
+    let tmp_ahash_set = &entities_pred.unique_tags();
+    let unsorted_target_names = tmp_ahash_set | entities_true_unique_tags;
     let target_names_sorted_iter = BTreeSet::from_iter(unsorted_target_names); // NOTE: Is it a good idea to convert to BTreeSet? What about a vec? A custom structure?
     let (p, r, f1, s) = precision_recall_fscore_support::<f32>(
         vec![vec![]], // We use the entities_pred/true instead of the vecs of tokens
         vec![vec![]],
         1.0,
         Average::None,
-        sample_weight.clone(),
+        sample_weight.clone(), //inexpensive to clone!
         zero_division,
         scheme,
         suffix,
@@ -605,28 +621,30 @@ pub fn classification_report<'a>(
         Some(&entities_true),
         Some(&entities_pred),
     )?;
-    let mut main_reporter: ReportsWithAverage = HashMap::new();
-    let mut none_reporter: HashMap<&str, ClassReportedMetrics> = HashMap::new();
-    for (name, precision, recall, fscore, support) in
-        multizip((target_names_sorted_iter.iter(), p, r, f1, s))
-    {
-        let tmp_metrics = ClassReportedMetrics {
+    let mut reporter = Reporter::default();
+    for (name, precision, recall, fscore, support) in multizip((
+        target_names_sorted_iter.iter(),
+        p.into_iter(),
+        r.into_iter(),
+        f1.into_iter(),
+        s.into_iter(),
+    )) {
+        let tmp_metrics = ClassMetrics {
+            class: String::from(*name),
             precision,
             recall,
             fscore,
             support,
             average: Average::None,
         };
-        none_reporter.insert(name, tmp_metrics);
+        reporter.insert(tmp_metrics);
     }
-    main_reporter.insert(Average::None, none_reporter);
     for avg in [Average::Micro, Average::Macro, Average::Weighted].into_iter() {
-        let avg_reporter: HashMap<&str, ClassReportedMetrics> = HashMap::new();
         let (p, r, f1, s) = precision_recall_fscore_support::<f32>(
             vec![vec![]], // We use the entities_pred/true instead of the vecs of tokens
             vec![vec![]],
             1.0,
-            Average::None,
+            avg,
             sample_weight.clone(),
             zero_division,
             scheme,
@@ -636,17 +654,17 @@ pub fn classification_report<'a>(
             Some(&entities_true),
             Some(&entities_pred),
         )?;
-        let tmp_metrics = ClassReportedMetrics {
+        let tmp_metrics = ClassMetrics {
+            class: String::from_iter([Average::OVERALL_PREFIX, "_", avg.to_string().as_ref()]),
             precision: p.item()?,
             recall: r.item()?,
             fscore: f1.item()?,
             support: s.item()?,
             average: avg,
         };
-        // avg_reporter
-        main_reporter.insert(k, v);
+        reporter.insert(tmp_metrics);
     }
-    todo!()
+    Ok(reporter)
 }
 
 //     average_options = ("micro", "macro", "weighted")
@@ -670,6 +688,32 @@ pub fn classification_report<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use enum_iterator::all;
+
+    #[test]
+    fn test_classification_report() {
+        let y_true = vec![
+            vec!["O", "O", "O", "B-MISC", "I-MISC", "I-MISC", "O"],
+            vec!["B-PER", "I-PER", "O"],
+        ];
+        let y_pred = vec![
+            vec!["O", "O", "B-MISC", "I-MISC", "I-MISC", "I-MISC", "O"],
+            vec!["B-PER", "I-PER", "O"],
+        ];
+        let reporter = classification_report(
+            y_true,
+            y_pred,
+            None,
+            DivisionByZeroStrategy::ReplaceBy1,
+            SchemeType::IOB2,
+            false,
+            '-',
+            true,
+        );
+        let reporter_unwrapped = reporter.unwrap();
+        println!("{}", reporter_unwrapped);
+        assert!(false)
+    }
 
     #[test]
     fn test_par_divide_results_and_mask() {
@@ -724,6 +768,7 @@ mod tests {
         let (predicted_sum, true_positive_sum, true_sum) =
             extract_tp_actual_correct(y_true, y_pred, SchemeType::IOB2, false, '-', None, None)
                 .unwrap();
+        dbg!(true_positive_sum.clone());
         let expected = (vec![1, 1], vec![0, 1], vec![1, 1]);
         assert_eq!(
             (expected),
@@ -768,6 +813,23 @@ mod tests {
                 support.item().unwrap()
             )
         );
+    }
+    #[test]
+    fn test_all_averages_strings() {
+        let expected = Average::ALL_AVERAGES_STRINGS
+            .into_iter()
+            .collect::<Vec<_>>();
+        let actual = all::<Average>()
+            .map(|a| a.to_string().leak())
+            .collect::<Vec<_>>();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_len_special_ordered_classes() {
+        let expected = Average::ALL_SPECIAL_ORDERED_CLASS.into_iter().count();
+
+        assert_eq!(expected, 4);
     }
     // >>> from seqeval.metrics.v1 import precision_recall_fscore_support
     // >>> from seqeval.scheme import IOB2

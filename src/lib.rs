@@ -948,7 +948,6 @@ impl<'a> Entities<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-
     #[test]
     fn test_entities_try_from() {
         let vec_of_tokens = vec![
