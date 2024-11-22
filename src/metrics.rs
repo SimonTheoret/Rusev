@@ -3,8 +3,7 @@ use crate::schemes::TryFromVec;
 use crate::{ConversionError, Entities, SchemeType};
 use core::fmt;
 use itertools::multizip;
-use ndarray::Data;
-use ndarray::{prelude::*, Array, ScalarOperand};
+use ndarray::{prelude::*, Array, Data, ScalarOperand, Zip};
 use ndarray_stats::{errors::MultiInputError, SummaryStatisticsExt};
 use num::{Float, Num, NumCast};
 use serde::{Deserialize, Serialize};
@@ -12,9 +11,6 @@ use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
-use std::sync::OnceLock;
-
-const WARN_FOR: [Metric; 3] = [Metric::Precision, Metric::Recall, Metric::FScore];
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArrayNotUniqueOrEmpty(usize);
@@ -192,38 +188,32 @@ impl<T: Float + Send + Sync + Clone + Copy + ScalarOperand + Debug> FloatExt for
 //
 // impl<T: Integer + Send + Sync + Clone + Copy + ScalarOperand + Debug> IntExt for T {}
 
-fn prf_divide<I: Num + Clone + Send + Sync + Copy, D: Dimension>(
+fn prf_divide<I: Debug + Num + Clone + Send + Sync + Copy, D: Dimension>(
     numerator: ArcArray<I, D>,
     denominator: ArrayViewMut<I, D>,
     parallel: bool,
-    metric: Metric,
     zero_division: DivisionByZeroStrategy,
 ) -> Result<ArcArray<I, D>, DivisionByZeroError> {
-    let (mut result, found_0_in_denom) = if parallel {
+    let (mut result, zero_mask) = if parallel {
         par_prf_divide_results_and_mask(numerator, denominator)
     } else {
         prf_divide_results_and_mask(numerator, denominator)
     };
-    if found_0_in_denom {
-        match zero_division {
-            DivisionByZeroStrategy::ReturnError => Err(DivisionByZeroError),
-            DivisionByZeroStrategy::ReplaceBy1 => {
-                if parallel {
-                    result = par_replace(result, I::zero(), I::one());
-                } else {
-                    result = replace(result, I::zero(), I::one());
-                }
-                if WARN_FOR.contains(&metric) {
-                    eprintln!(
-                        "Warning: Encountered a division by zero while computing {:?}",
-                        metric
-                    );
-                }
-                Ok(result)
+
+    match zero_division {
+        DivisionByZeroStrategy::ReturnError => Err(DivisionByZeroError),
+        DivisionByZeroStrategy::ReplaceBy1 => {
+            if parallel {
+                result = par_replace(result, I::zero(), I::one());
+            } else {
+                result = replace(result, I::zero(), I::one());
             }
+            Ok(result)
         }
-    } else {
-        Ok(result)
+        DivisionByZeroStrategy::ReplaceBy0 => {
+            let final_result = result * zero_mask;
+            Ok(final_result)
+        }
     }
 }
 
@@ -267,7 +257,7 @@ fn check_consistent_length<T>(
 /// predicted sum, true positive sum and true sum
 type ActualTPCorrect<T> = (Array1<T>, Array1<T>, Array1<T>);
 
-fn extract_tp_actual_correct<'a>(
+fn extract_tp_actual_correct_strict<'a>(
     y_true: Vec<Vec<&'a str>>,
     y_pred: Vec<Vec<&'a str>>,
     scheme: SchemeType,
@@ -409,7 +399,7 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
         return Err(ComputationError::BetaNotPositive);
     };
     check_consistent_length(&y_true, &y_pred)?;
-    let (mut pred_sum, mut tp_sum, mut true_sum) = extract_tp_actual_correct(
+    let (mut pred_sum, mut tp_sum, mut true_sum) = extract_tp_actual_correct_strict(
         y_true,
         y_pred,
         scheme,
@@ -425,19 +415,16 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
         true_sum = array![true_sum.sum()];
     };
     let arc_tp_sum = tp_sum.mapv(|x| x as f32).to_shared();
-
     let precision = prf_divide(
         arc_tp_sum.clone(), // ArcArray are (often) inexpensive to clone. They are in fact `Copy`
         pred_sum.mapv(|x| x as f32).view_mut(),
         parallel,
-        Metric::Precision,
         zero_division,
     )?;
     let recall = prf_divide(
         arc_tp_sum,
         true_sum.mapv(|x| x as f32).view_mut(),
         parallel,
-        Metric::Recall,
         zero_division,
     )?;
     let f_score: ArcArray<f32, Dim<[usize; 1]>> = if beta2.is_infinite() && beta2.is_sign_positive()
@@ -464,7 +451,7 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
                     DivisionByZeroStrategy::ReturnError => {
                         return Err(ComputationError::DivisionByZero(DivisionByZeroError))
                     }
-                    DivisionByZeroStrategy::ReplaceBy1 => {
+                    _ => {
                         return Ok((
                             precision.to_owned(),
                             recall.to_owned(),
@@ -516,53 +503,43 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
     }
 }
 
-type Found0InDenominator = bool;
-
 /// This function computes the result in parallel. For a synchronous
-/// version of this function, see `prf_divide_results`. The second
-/// return argument is `true` if it foufnd a zero in the
-/// denominator. Else, it is `false`.
+/// version of this function, see `prf_divide_results`.
 ///
 /// * `numerator`: Numerator of the division
-/// * `denominator`: denominator of the division
-fn par_prf_divide_results_and_mask<I: Num + Clone + Send + Sync, D: Dimension>(
+/// * `denominator`: Denominator of the division
+fn par_prf_divide_results_and_mask<I: Debug + Num + Clone + Send + Sync, D: Dimension>(
     numerator: ArcArray<I, D>,
     mut denominator: ArrayViewMut<I, D>,
-) -> (ArcArray<I, D>, Found0InDenominator) {
-    let found_zero_in_denom_cell = OnceLock::new();
-    denominator.par_mapv_inplace(|v| {
-        if v == I::zero() {
-            found_zero_in_denom_cell.get_or_init(|| false);
-            I::one()
+) -> (ArcArray<I, D>, Array<I, D>) {
+    let zero_at_mask = Zip::from(&mut denominator).par_map_collect(|d| {
+        if *d == I::zero() {
+            I::zero()
         } else {
-            v
+            I::one()
         }
     });
-    let found_zero_in_denom = found_zero_in_denom_cell.into_inner().unwrap_or(false);
-    (numerator / denominator, found_zero_in_denom)
+    denominator.par_mapv_inplace(|v| if v == I::zero() { I::one() } else { v });
+    // denominator.par_mapv_inplace(|v| if v == I::zero() { I::one() } else { v });
+    // zero_at_mask.par_mapv_inplace()
+
+    (numerator / denominator, zero_at_mask)
 }
 
 /// This function computes the result synchronously. For a parallel
-/// version of this function, see `par_prf_divide_results`. The second
-/// return argument is `true` if it foufnd a zero in the
-/// denominator. Else, it is `false`.
+/// version of this function, see `par_prf_divide_results`.
 ///
 /// * `numerator`: Numerator of the division
-/// * `denominator`: denominator of the division
-fn prf_divide_results_and_mask<Data: Num + Clone, Dim: Dimension>(
-    numerator: ArcArray<Data, Dim>,
-    mut denominator: ArrayViewMut<Data, Dim>,
-) -> (ArcArray<Data, Dim>, Found0InDenominator) {
-    let mut found_zero_in_num: Found0InDenominator = false;
-    denominator.mapv_inplace(|v| {
-        if v == Data::zero() {
-            found_zero_in_num = true;
-            Data::one()
-        } else {
-            v
-        }
-    });
-    (numerator / denominator, found_zero_in_num)
+/// * `denominator`: Denominator of the division
+fn prf_divide_results_and_mask<I: Debug + Num + Clone, D: Dimension>(
+    numerator: ArcArray<I, D>,
+    mut denominator: ArrayViewMut<I, D>,
+) -> (ArcArray<I, D>, Array<I, D>) {
+    let zero_at_mask =
+        Zip::from(&mut denominator)
+            .map_collect(|d| if *d == I::zero() { I::zero() } else { I::one() });
+    denominator.mapv_inplace(|v| if v == I::zero() { I::one() } else { v });
+    (numerator / denominator, zero_at_mask)
 }
 
 /// Helper function to replace values from an array.
@@ -721,7 +698,7 @@ mod tests {
             y_true,
             y_pred,
             None,
-            DivisionByZeroStrategy::ReplaceBy1,
+            DivisionByZeroStrategy::ReplaceBy0,
             SchemeType::IOB2,
             false,
             '-',
@@ -865,7 +842,7 @@ mod tests {
             y_true,
             y_pred,
             None,
-            DivisionByZeroStrategy::ReplaceBy1,
+            DivisionByZeroStrategy::ReplaceBy0,
             SchemeType::IOB2,
             false,
             '-',
@@ -891,12 +868,12 @@ PER, 1, 1, 1, 1\n";
         let mut same_cloned = numerator.clone();
         let denominator = cloned.view_mut();
         let same_denominator = same_cloned.view_mut();
-        let (div_result, has_zero) =
+        let (div_result, zero_mask) =
             prf_divide_results_and_mask(numerator.clone(), same_denominator);
-        let (par_div_result, par_has_zero) =
+        let (par_div_result, par_zero_mask) =
             par_prf_divide_results_and_mask(numerator, denominator);
-        let has_no_zero = !has_zero;
-        let par_has_no_zero = !par_has_zero;
+        let has_no_zero = zero_mask == ArcArray::ones(div_result.raw_dim());
+        let par_has_no_zero = par_zero_mask == ArcArray::ones(par_div_result.raw_dim());
         assert!(has_no_zero);
         assert!(par_has_no_zero);
         assert_eq!(div_result, array![[1., 1., 1., 1.,]]);
@@ -934,9 +911,16 @@ PER, 1, 1, 1, 1\n";
             vec!["B-PER", "I-PER", "O"],
         ];
         // predicted sum, true positive sum and true sum
-        let (predicted_sum, true_positive_sum, true_sum) =
-            extract_tp_actual_correct(y_true, y_pred, SchemeType::IOB2, false, '-', None, None)
-                .unwrap();
+        let (predicted_sum, true_positive_sum, true_sum) = extract_tp_actual_correct_strict(
+            y_true,
+            y_pred,
+            SchemeType::IOB2,
+            false,
+            '-',
+            None,
+            None,
+        )
+        .unwrap();
         dbg!(true_positive_sum.clone());
         let expected = (vec![1, 1], vec![0, 1], vec![1, 1]);
         assert_eq!(
@@ -959,12 +943,12 @@ PER, 1, 1, 1, 1\n";
             vec!["B-PER", "I-PER", "O"],
         ];
         let (precision, recall, fscore, support) = precision_recall_fscore_support::<f32>(
-            y_true,
-            y_pred,
+            y_true.clone(),
+            y_pred.clone(),
             1.0,
             Average::Macro,
             None,
-            DivisionByZeroStrategy::ReplaceBy1,
+            DivisionByZeroStrategy::ReplaceBy0,
             SchemeType::IOB2,
             false,
             '-',
@@ -982,6 +966,74 @@ PER, 1, 1, 1, 1\n";
                 support.item().unwrap()
             )
         );
+        let (precision, recall, fscore, support) = precision_recall_fscore_support::<f32>(
+            y_true,
+            y_pred,
+            1.0,
+            Average::Micro,
+            None,
+            DivisionByZeroStrategy::ReplaceBy0,
+            SchemeType::IOB2,
+            false,
+            '-',
+            true,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            (0.5, 0.5, 0.5, 2),
+            (
+                precision.item().unwrap(),
+                recall.item().unwrap(),
+                fscore.item().unwrap(),
+                support.item().unwrap()
+            )
+        );
+    }
+
+    #[test]
+    fn test_f1_score() {
+        let y_true = vec![vec!["B-ORG", "I-ORG"]];
+        let y_pred = vec![vec!["I-ORG", "I-ORG"]];
+        let test_cases = vec![
+            (Average::Micro, 0.0),
+            (Average::Macro, 0.0),
+            (Average::Weighted, 0.0),
+        ];
+        for (avg, expected) in test_cases {
+            let (_, _, f1, _) = precision_recall_fscore_support(
+                y_true.clone(),
+                y_pred.clone(),
+                1.0,
+                avg,
+                None,
+                DivisionByZeroStrategy::ReplaceBy0,
+                SchemeType::IOB2,
+                false,
+                '-',
+                true,
+                None,
+                None,
+            )
+            .unwrap();
+            let actual = f1.item().unwrap();
+            assert_eq!(actual, expected)
+        }
+        // @pytest.mark.parametrize(
+        //     'average, expected',
+        //     [
+        //         (None, np.array([1])),
+        //         ('micro', 1),
+        //         ('macro', 1),
+        //         ('weighted', 1)
+        //     ]
+        // )
+        // def test_conll_f1score(self, average, expected):
+        //     y_true = [['B-ORG', 'I-ORG']]
+        //     y_pred = [['I-ORG', 'I-ORG']]
+        //     f = f1_score(y_true, y_pred, average=average)
+        //     assert f == expected
     }
     // >> from seqeval.metrics.v1 import precision_recall_fscore_support
     // >>> from seqeval.scheme import IOB2
