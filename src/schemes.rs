@@ -824,6 +824,14 @@ impl<'a> DerefMut for Entities<'a> {
     }
 }
 
+impl<'a> IntoIterator for Entities<'a> {
+    type Item = Entity<'a>;
+    type IntoIter = std::iter::Flatten<std::vec::IntoIter<Vec<Entity<'a>>>>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter().flatten()
+    }
+}
+
 /// This trait mimics the TryFrom trait from the std lib. It is used
 /// to *try* to build an Entities structure. It can fail if there is a
 /// malformed token in `tokens`.
@@ -837,10 +845,9 @@ impl<'a> DerefMut for Entities<'a> {
 /// * `delimiter`: The character used separate the Tag from the Prefix
 ///    (ex: `I-PER`, where the tag is `PER` and the prefix is `I`)
 /// * `sent_id`: An optional id.
-pub(crate) trait TryFromVec<'a, T: Into<&'a str>> {
-    //TODO: Change this trait for a good'ol TryFrom<Vec<Vec<T>>
+pub(crate) trait TryFromVecStrict<'a, T: Into<&'a str>> {
     type Error: Error;
-    fn try_from_vecs(
+    fn try_from_vecs_strict(
         tokens: Vec<Vec<T>>,
         scheme: SchemeType,
         suffix: bool,
@@ -855,13 +862,18 @@ pub(crate) trait TryFromVec<'a, T: Into<&'a str>> {
         sent_id: Option<usize>,
     ) -> Result<Entities<'a>, Self::Error> {
         let vec_of_vec_of_str: Vec<Vec<T>> = tokens.into();
-        Self::try_from_vecs(vec_of_vec_of_str, scheme, suffix, delimiter, sent_id)
+        Self::try_from_vecs_strict(vec_of_vec_of_str, scheme, suffix, delimiter, sent_id)
     }
 }
 
-impl<'a, T: Into<&'a str>> TryFromVec<'a, T> for Entities<'a> {
+pub(crate) trait TryFromVecLenient<'a, T: Into<&'a str>> {
+    type Error: Error;
+    fn try_from_vecs_lenient();
+}
+
+impl<'a, T: Into<&'a str>> TryFromVecStrict<'a, T> for Entities<'a> {
     type Error = ConversionError<&'a str>;
-    fn try_from_vecs(
+    fn try_from_vecs_strict(
         vec_of_tokens_2d: Vec<Vec<T>>,
         scheme: SchemeType,
         suffix: bool,
@@ -923,7 +935,8 @@ mod test {
             ],
         ];
         let entities =
-            Entities::try_from_vecs(vec_of_tokens, SchemeType::IOB2, false, '-', None).unwrap();
+            Entities::try_from_vecs_strict(vec_of_tokens, SchemeType::IOB2, false, '-', None)
+                .unwrap();
         assert_eq!(
             entities.0,
             vec![
@@ -1121,7 +1134,7 @@ mod test {
     fn test_unique_tags() {
         let sequences = vec![build_str_vec(), build_str_vec_diff()];
         let entities =
-            Entities::try_from_vecs(sequences, SchemeType::IOB2, false, '-', None).unwrap();
+            Entities::try_from_vecs_strict(sequences, SchemeType::IOB2, false, '-', None).unwrap();
         let actual_unique_tags = entities.unique_tags();
         let expected_unique_tags: AHashSet<&str> = AHashSet::from_iter(vec!["PER", "LOC", "GEO"]);
         assert_eq!(actual_unique_tags, expected_unique_tags);

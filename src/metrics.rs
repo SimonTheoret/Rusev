@@ -1,5 +1,5 @@
 use crate::reporter::{ClassMetrics, Reporter};
-use crate::schemes::TryFromVec;
+use crate::schemes::TryFromVecStrict;
 use crate::{ConversionError, Entities, SchemeType};
 use core::fmt;
 use itertools::multizip;
@@ -268,11 +268,11 @@ fn extract_tp_actual_correct_strict<'a>(
 ) -> Result<ActualTPCorrect<usize>, ComputationError<&'a str>> {
     let entities_true_res = match entities_true {
         Some(e) => e,
-        None => &Entities::try_from_vecs(y_true, scheme, suffix, delimiter, None)?,
+        None => &Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter, None)?,
     };
     let entities_pred_res = match entities_pred {
         Some(e) => e,
-        None => &Entities::try_from_vecs(y_pred, scheme, suffix, delimiter, None)?,
+        None => &Entities::try_from_vecs_strict(y_pred, scheme, suffix, delimiter, None)?,
     };
     let entities_pred_unique_tags = entities_pred_res.unique_tags();
     let entities_true_unique_tags = entities_true_res.unique_tags();
@@ -300,6 +300,42 @@ fn extract_tp_actual_correct_strict<'a>(
 
     Ok((pred_sum, tp_sum, true_sum))
 }
+
+fn extract_tp_actual_correct_lenient<'a>(
+    y_true: Vec<Vec<&'a str>>,
+    y_pred: Vec<Vec<&'a str>>,
+    scheme: SchemeType,
+    suffix: bool,
+    delimiter: char,
+    entities_true: Option<&Entities<'a>>,
+    entities_pred: Option<&Entities<'a>>,
+) -> Result<ActualTPCorrect<usize>, ComputationError<&'a str>> {
+    let entities_true_iter =
+        Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter, None)?.into_iter();
+
+    let entities_pred_iter =
+        Entities::try_from_vecs_strict(y_pred, scheme, suffix, delimiter, None)?.into_iter();
+    todo!()
+}
+
+// entities_true = defaultdict(set)
+// entities_pred = defaultdict(set)
+// for type_name, start, end in get_entities(y_true, suffix):
+//     entities_true[type_name].add((start, end))
+// for type_name, start, end in get_entities(y_pred, suffix):
+//     entities_pred[type_name].add((start, end))
+//
+// target_names = sorted(set(entities_true.keys()) | set(entities_pred.keys()))
+//
+// tp_sum = np.array([], dtype=np.int32)
+// pred_sum = np.array([], dtype=np.int32)
+// true_sum = np.array([], dtype=np.int32)
+// for type_name in target_names:
+//     entities_true_type = entities_true.get(type_name, set())
+//     entities_pred_type = entities_pred.get(type_name, set())
+//     tp_sum = np.append(tp_sum, len(entities_true_type & entities_pred_type))
+//     pred_sum = np.append(pred_sum, len(entities_pred_type))
+//     true_sum = np.append(true_sum, len(entities_true_type))
 
 #[derive(Debug, Clone, PartialEq)]
 /// Enum error encompassing many type of failures that could happen when computing the precison,
@@ -573,8 +609,8 @@ pub fn classification_report<'a>(
     parallel: bool,
 ) -> Result<Reporter, ComputationError<&'a str>> {
     check_consistent_length(y_true.as_ref(), y_pred.as_ref())?;
-    let entities_true = Entities::try_from_vecs(y_true, scheme, suffix, delimiter, None)?;
-    let entities_pred = Entities::try_from_vecs(y_pred, scheme, suffix, delimiter, None)?;
+    let entities_true = Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter, None)?;
+    let entities_pred = Entities::try_from_vecs_strict(y_pred, scheme, suffix, delimiter, None)?;
     let entities_true_unique_tags = &entities_true.unique_tags();
     let tmp_ahash_set = &entities_pred.unique_tags();
     let unsorted_target_names = tmp_ahash_set | entities_true_unique_tags;
