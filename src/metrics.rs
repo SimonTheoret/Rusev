@@ -157,6 +157,7 @@ impl Average {
         "Overall_Weighted",
         "Overall_Samples",
     ];
+}
 #[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum OverallAverage {
     Micro,
@@ -518,34 +519,6 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
         }
     }
 }
-// # Average the results
-// if average == "weighted":
-//     weights = true_sum
-//     if weights.sum() == 0:
-//         zero_division_value = 0.0 if zero_division in ["warn", 0] else 1.0
-//         # precision is zero_division if there are no positive predictions
-//         # recall is zero_division if there are no positive labels
-//         # fscore is zero_division if all labels AND predictions are
-//         # negative
-//         return (
-//             zero_division_value if pred_sum.sum() == 0 else 0.0,
-//             zero_division_value,
-//             zero_division_value if pred_sum.sum() == 0 else 0.0,
-//             sum(true_sum),
-//         )
-
-// elif average == "samples":
-//     weights = sample_weight
-// else:
-//     weights = None
-
-// if average is not None:
-//     precision = np.average(precision, weights=weights)
-//     recall = np.average(recall, weights=weights)
-//     f_score = np.average(f_score, weights=weights)
-//     true_sum = sum(true_sum)
-
-// return precision, recall, f_score, true_sum
 
 type Found0InDenominator = bool;
 
