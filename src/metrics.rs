@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 
 const WARN_FOR: [Metric; 3] = [Metric::Precision, Metric::Recall, Metric::FScore];
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ArrayNotUniqueOrEmpty(usize);
 
 impl Display for ArrayNotUniqueOrEmpty {
@@ -77,6 +77,8 @@ pub enum DivisionByZeroStrategy {
     ReplaceBy1,
     /// Returns an error
     ReturnError,
+    /// Returns 0 when the denominator is 0
+    ReplaceBy0,
 }
 impl Default for DivisionByZeroStrategy {
     fn default() -> Self {
@@ -109,7 +111,7 @@ impl FromStr for DivisionByZeroStrategy {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DivisionByZeroError;
 
 impl Display for DivisionByZeroError {
@@ -309,7 +311,7 @@ fn extract_tp_actual_correct<'a>(
     Ok((pred_sum, tp_sum, true_sum))
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// Enum error encompassing many type of failures that could happen when computing the precison,
 /// recall, f-score and the support.
 pub enum ComputationError<S: AsRef<str> + std::fmt::Debug> {
@@ -427,7 +429,7 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
     let precision = prf_divide(
         arc_tp_sum.clone(), // ArcArray are (often) inexpensive to clone. They are in fact `Copy`
         pred_sum.mapv(|x| x as f32).view_mut(),
-        true,
+        parallel,
         Metric::Precision,
         zero_division,
     )?;
@@ -680,7 +682,174 @@ pub fn classification_report<'a>(
 
 #[cfg(test)]
 mod tests {
+    pub trait CloseEnough {
+        fn are_close(&self, other: &Self, eps: f32) -> bool;
+    }
+    // ClassMetrics does not have the default PartialEq implementation.
+    impl CloseEnough for ClassMetrics {
+        fn are_close(&self, other: &Self, eps: f32) -> bool {
+            let are_equal = self == other;
+            let precision_is_equal = f32::abs(self.precision - other.precision) < eps;
+            let recall_is_equal = f32::abs(self.recall - other.recall) < eps;
+            let fscore_is_equal = f32::abs(self.fscore - other.fscore) < eps;
+            let support_is_equal = self.support == other.support;
+            return are_equal
+                && precision_is_equal
+                && recall_is_equal
+                && fscore_is_equal
+                && support_is_equal;
+        }
+    }
+    impl CloseEnough for Reporter {
+        fn are_close(&self, other: &Self, eps: f32) -> bool {
+            for (c1, c2) in self.iter().zip(other.iter()) {
+                let are_close = c1.are_close(c2, eps);
+                if !are_close {
+                    return false;
+                };
+            }
+            true
+        }
+    }
+
     use super::*;
+    #[test]
+    fn test_reporter_output() {
+        let y_true = vec![vec!["B-A", "B-B", "O", "B-A"]];
+        let y_pred = vec![vec!["O", "B-B", "B-C", "B-A"]];
+        let actual = classification_report(
+            y_true,
+            y_pred,
+            None,
+            DivisionByZeroStrategy::ReplaceBy1,
+            SchemeType::IOB2,
+            false,
+            '-',
+            false,
+        )
+        .unwrap();
+        {
+            let expected = Reporter {
+                classes: BTreeSet::from_iter(vec![
+                    ClassMetrics {
+                        class: String::from("A"),
+                        fscore: 0.6666666666666666,
+                        precision: 1.0,
+                        recall: 0.5,
+                        support: 2,
+                        average: Average::None,
+                    },
+                    ClassMetrics {
+                        class: String::from("B"),
+                        fscore: 1.0,
+                        precision: 1.0,
+                        recall: 1.0,
+                        support: 1,
+                        average: Average::None,
+                    },
+                    ClassMetrics {
+                        class: String::from("C"),
+                        fscore: 0.0,
+                        precision: 0.0,
+                        recall: 0.0,
+                        support: 0,
+                        average: Average::None,
+                    },
+                    ClassMetrics::new_overall(
+                        OverallAverage::Macro,
+                        0.66666666666666,
+                        0.5,
+                        0.55555555555555,
+                        3,
+                    ),
+                    ClassMetrics::new_overall(
+                        OverallAverage::Micro,
+                        0.66666666666666,
+                        0.66666666666666,
+                        0.66666666666666,
+                        3,
+                    ),
+                    ClassMetrics::new_overall(
+                        OverallAverage::Weighted,
+                        1.0,
+                        0.66666666666666,
+                        0.77777777777777,
+                        3,
+                    ),
+                ]),
+            };
+            dbg!(&actual, &expected);
+            assert!(actual.are_close(&expected, 1e-6));
+        }
+    }
+
+    #[test]
+    fn test_check_consistent_length() {
+        let test_cases = [
+            (vec![vec![]], vec![vec![]], Ok(())),
+            (vec![vec!['B']], vec![vec!['B']], Ok(())),
+            (
+                vec![vec![]],
+                vec![vec!['B']],
+                Err(InconsistentLengthError(0, 1)),
+            ),
+            (
+                vec![vec!['B'], vec![]],
+                vec![vec!['B']],
+                Err(InconsistentLengthError(2, 1)),
+            ),
+            (
+                vec![vec!['B'], vec![]],
+                vec![vec!['B'], vec!['I']],
+                Err(InconsistentLengthError(0, 1)),
+            ),
+        ];
+        for (y_true, y_pred, expected) in test_cases.into_iter() {
+            dbg!(y_true.clone(), y_pred.clone());
+            assert_eq!(check_consistent_length(&y_true, &y_pred), expected)
+        }
+    }
+
+    #[test]
+    fn test_classification_report_inconsistent_length() {
+        let test_cases: Vec<(
+            Vec<Vec<&str>>,
+            Vec<Vec<&str>>,
+            Result<Reporter, ComputationError<&str>>,
+        )> = vec![
+            (
+                vec![vec!["B-PER"], vec!["I-PER"]],
+                vec![vec![]],
+                Err(ComputationError::InconsistentLenght(
+                    InconsistentLengthError(2, 1),
+                )),
+            ),
+            (
+                vec![vec![]],
+                vec![],
+                Err(ComputationError::InconsistentLenght(
+                    InconsistentLengthError(1, 0),
+                )),
+            ),
+        ];
+        for (y_true, y_pred, expected) in test_cases {
+            dbg!(y_true.clone(), y_pred.clone());
+            // let expected_err =
+            //     expected.expect_err("This test is only veryfing the right error type");
+            let actual = classification_report(
+                y_true,
+                y_pred,
+                None,
+                DivisionByZeroStrategy::ReplaceBy1,
+                SchemeType::IOB2,
+                false,
+                '-',
+                true,
+            );
+            // .expect_err("There was no error here!");
+            assert_eq!(actual, expected)
+        }
+    }
 
     #[test]
     fn test_classification_report() {
@@ -704,6 +873,7 @@ mod tests {
         );
         let reporter_unwrapped = reporter.unwrap();
         dbg!("{}", reporter_unwrapped.clone());
+        // NOTE: Do not change the indentation
         let expected = "Class, Precision, Recall, Fscore, Support
 Overall_Weighted, 0.5, 0.5, 0.5, 2
 Overall_Micro, 0.5, 0.5, 0.5, 2
@@ -813,7 +983,7 @@ PER, 1, 1, 1, 1\n";
             )
         );
     }
-    // >>> from seqeval.metrics.v1 import precision_recall_fscore_support
+    // >> from seqeval.metrics.v1 import precision_recall_fscore_support
     // >>> from seqeval.scheme import IOB2
     // >>> y_true = [['O', 'O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
     // >>> y_pred = [['O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]

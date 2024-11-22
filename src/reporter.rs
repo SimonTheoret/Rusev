@@ -6,9 +6,9 @@ use std::collections::BTreeSet;
 use std::fmt::Display;
 use std::ops::Deref;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Reporter {
-    classes: BTreeSet<ClassMetrics>,
+    pub classes: BTreeSet<ClassMetrics>,
 }
 
 // #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default, PartialOrd, Ord)]

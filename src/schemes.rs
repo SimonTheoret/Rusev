@@ -10,7 +10,6 @@ use std::str::FromStr;
 use std::{borrow::Cow, cell::RefCell};
 use unicode_segmentation::UnicodeSegmentation;
 
-
 /// An entity represent a named objet in named entity recognition (NER). It contains a start and an
 /// end(i.e. at what index of the list does it starts and ends) and a tag, which the associated
 /// entity (such as `LOC`, `NAME`, `PER`, etc.)
@@ -66,7 +65,7 @@ impl Prefix {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// Could not parse the string into a `Prefix`
 pub struct ParsingPrefixError<S: AsRef<str>>(S);
 
@@ -775,7 +774,7 @@ impl<'a> EntitiesIter<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 /// Enum of errors wrapping the actual error structs.
 pub enum ConversionError<S: AsRef<str>> {
     /// Invalid token encoutered when
