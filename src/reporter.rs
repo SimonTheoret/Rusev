@@ -54,7 +54,8 @@ impl Deref for Reporter {
 impl Display for Reporter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Class, Precision, Recall, Fscore, Support")?;
-        for v in self.iter().rev(){ //Must call `.rev()` because the iter is in ascending order
+        for v in self.iter().rev() {
+            //Must call `.rev()` because the iter is in ascending order
             writeln!(f, "{}", v)?
         }
         Ok(())
@@ -127,17 +128,6 @@ impl ClassMetrics {
     }
 }
 
-// impl PartialOrd for ClassMetrics {
-//     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-//         let cmp_average = self.average.partial_cmp(&other.average);
-//         Some(self.class.cmp(&other.class))
-//     }
-// }
-// impl Ord for ClassMetrics{
-//     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-//         self.partial_cmp(other).unwrap()
-//     }
-// }
 /// The Classmetrics struct acts as a line in a dataframe when displayed.
 impl Display for ClassMetrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

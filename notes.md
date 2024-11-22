@@ -1,5 +1,5 @@
 * Goals
-	- [ ] Finish the calculation implementation
+	- [x] Finish the calculation implementation
 	- [ ] Write a lot of tests
     - [ ] Wrap the `Tokens` enum into some trait, so we can pass them around.
 	- [ ] Find parallelization opportunities

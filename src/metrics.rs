@@ -152,17 +152,6 @@ impl Ord for Average {
     }
 }
 
-impl Average {
-    // pub(crate) const ALL_AVERAGES_STRINGS: [&'static str; 5] =
-    //     ["None", "Micro", "Macro", "Weighted", "Samples"];
-    pub(crate) const OVERALL_PREFIX: &'static str = "Overall";
-    pub(crate) const ALL_SPECIAL_ORDERED_CLASS: [&'static str; 4] = [
-        "Overall_Micro",
-        "Overall_Macro",
-        "Overall_Weighted",
-        "Overall_Samples",
-    ];
-}
 #[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum OverallAverage {
     Micro,
@@ -714,8 +703,15 @@ mod tests {
             true,
         );
         let reporter_unwrapped = reporter.unwrap();
-        println!("{}", reporter_unwrapped);
-        assert!(false)
+        dbg!("{}", reporter_unwrapped.clone());
+        let expected = "Class, Precision, Recall, Fscore, Support
+Overall_Weighted, 0.5, 0.5, 0.5, 2
+Overall_Micro, 0.5, 0.5, 0.5, 2
+Overall_Macro, 0.5, 0.5, 0.5, 2
+MISC, 0, 0, 0, 1
+PER, 1, 1, 1, 1\n";
+        let actual = reporter_unwrapped.to_string();
+        assert_eq!(actual, expected);
     }
 
     #[test]
@@ -816,19 +812,6 @@ mod tests {
                 support.item().unwrap()
             )
         );
-    }
-    #[test]
-    fn test_len_all_averages_strings() {
-        let actual = Average::ALL_SPECIAL_ORDERED_CLASS.into_iter().count();
-        let expected = 4;
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_len_special_ordered_classes() {
-        let actual = Average::ALL_SPECIAL_ORDERED_CLASS.into_iter().count();
-        let expected = 4;
-        assert_eq!(actual, expected);
     }
     // >>> from seqeval.metrics.v1 import precision_recall_fscore_support
     // >>> from seqeval.scheme import IOB2
