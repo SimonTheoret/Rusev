@@ -1,7 +1,7 @@
 use crate::reporter::{ClassMetrics, Reporter};
-use crate::{ConversionError, Entities, SchemeType, TryFromVec};
+use crate::schemes::TryFromVec;
+use crate::{ConversionError, Entities, SchemeType};
 use core::fmt;
-use enum_iterator::Sequence;
 use itertools::multizip;
 use ndarray::Data;
 use ndarray::{prelude::*, Array, ScalarOperand};
@@ -120,7 +120,7 @@ impl Display for DivisionByZeroError {
 
 impl Error for DivisionByZeroError {}
 
-#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, Serialize, Deserialize, Sequence)]
+#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum Average {
     None,
     Micro,
@@ -157,6 +157,32 @@ impl Average {
         "Overall_Weighted",
         "Overall_Samples",
     ];
+#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+pub enum OverallAverage {
+    Micro,
+    Macro,
+    Weighted,
+}
+
+impl Display for OverallAverage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str_content = match self {
+            Self::Micro => "Overall_Micro",
+            Self::Macro => "Overall_Macro",
+            Self::Weighted => "Overall_Weighted",
+        };
+        write!(f, "{}", str_content)
+    }
+}
+
+impl From<OverallAverage> for Average {
+    fn from(value: OverallAverage) -> Self {
+        match value {
+            OverallAverage::Micro => Average::Micro,
+            OverallAverage::Macro => Average::Macro,
+            OverallAverage::Weighted => Average::Weighted,
+        }
+    }
 }
 
 /// Internal extension trait for Num's Float trait
@@ -639,12 +665,18 @@ pub fn classification_report<'a>(
         };
         reporter.insert(tmp_metrics);
     }
-    for avg in [Average::Micro, Average::Macro, Average::Weighted].into_iter() {
+    for avg in [
+        OverallAverage::Micro,
+        OverallAverage::Macro,
+        OverallAverage::Weighted,
+    ]
+    .into_iter()
+    {
         let (p, r, f1, s) = precision_recall_fscore_support::<f32>(
             vec![vec![]], // We use the entities_pred/true instead of the vecs of tokens
             vec![vec![]],
             1.0,
-            avg,
+            avg.into(),
             sample_weight.clone(),
             zero_division,
             scheme,
@@ -654,14 +686,8 @@ pub fn classification_report<'a>(
             Some(&entities_true),
             Some(&entities_pred),
         )?;
-        let tmp_metrics = ClassMetrics {
-            class: String::from_iter([Average::OVERALL_PREFIX, "_", avg.to_string().as_ref()]),
-            precision: p.item()?,
-            recall: r.item()?,
-            fscore: f1.item()?,
-            support: s.item()?,
-            average: avg,
-        };
+        let tmp_metrics =
+            ClassMetrics::new_overall(avg, p.item()?, r.item()?, f1.item()?, s.item()?);
         reporter.insert(tmp_metrics);
     }
     Ok(reporter)
@@ -688,7 +714,6 @@ pub fn classification_report<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use enum_iterator::all;
 
     #[test]
     fn test_classification_report() {
