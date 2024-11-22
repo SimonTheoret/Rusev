@@ -146,6 +146,11 @@ impl PartialOrd for Average {
         }
     }
 }
+impl Ord for Average {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
 
 impl Average {
     // pub(crate) const ALL_AVERAGES_STRINGS: [&'static str; 5] =
