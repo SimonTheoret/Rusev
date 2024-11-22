@@ -14,7 +14,7 @@ members = [".", "rusev_macro"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["Simon Théorêt <simonteoret@hotmail.com"] 
+authors = ["Simon Théorêt <simonteoret@hotmail.com"]
 description = "Fast implementation of SeqEval, a sequence evaluation framework"
 license-file = "UNLICENCE"
 repository = "https://github.com/SimonTheoret/rusev"
@@ -33,7 +33,6 @@ ahash = "0.8.11"
 ndarray-stats = "0.6.0"
 itertools = "0.13.0"
 serde = { version = "1.0.215", features = ["derive"] }
-enum-iterator = "2.1.0"
 
 [dev-dependencies]
 parameterized = "2.0.0"

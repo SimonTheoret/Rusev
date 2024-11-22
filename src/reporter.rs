@@ -1,44 +1,31 @@
 use crate::metrics::Average;
+use crate::metrics::OverallAverage;
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialOrd;
 use std::collections::BTreeMap;
 use std::fmt::Display;
-use std::ops::{ Deref, DerefMut };
+use std::ops::{Deref, DerefMut};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Reporter {
     classes: BTreeMap<Class, ClassMetrics>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default, PartialOrd, Ord)]
 /// This struct is a thing wrapper around a String. It modifies the PartialOrd implementation to
 /// allow the `Overall_x` classes to stay first.
 pub struct Class(String);
 
-impl Deref for Class{
+impl Deref for Class {
     type Target = String;
-    fn deref(&self) -> &Self::Target {&self.0}
-}
-impl DerefMut for Class{
-    fn deref_mut(&mut self) -> &mut Self::Target {&mut self.0}
-}
-
-impl PartialOrd for Class{
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        if Average::ALL_SPECIAL_ORDERED_CLASS.contains(&self.as_str()) && Average::ALL_SPECIAL_ORDERED_CLASS.contains(&other.as_str()) {
-            Some(std::cmp::Ordering::Equal)
-        } else if  Average::ALL_SPECIAL_ORDERED_CLASS.contains(&self.as_str()) && !Average::ALL_SPECIAL_ORDERED_CLASS.contains(&other.as_str()) {
-            return Some(std::cmp::Ordering::Greater)
-        } else if  !Average::ALL_SPECIAL_ORDERED_CLASS.contains(&self.as_str()) && Average::ALL_SPECIAL_ORDERED_CLASS.contains(&other.as_str()) {
-            return Some(std::cmp::Ordering::Less)
-        } else{
-            return Some(self.0.cmp(&other.0))
-        }
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
-
-impl Ord for Class{
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {self.partial_cmp(other).unwrap()}
+impl DerefMut for Class {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 impl Default for Reporter {
@@ -53,7 +40,10 @@ impl Reporter {
     ///TODO: Change the api to NOT allow the user to insert the same class twice
     pub fn insert(&mut self, metrics: ClassMetrics) -> Option<ClassMetrics> {
         let key: String = metrics.class.clone();
-        self.classes.insert(Class(key), metrics)
+        dbg!(&key, &metrics);
+        let ret = self.classes.insert(Class(key), metrics);
+        dbg!(self);
+        ret
     }
 }
 impl Deref for Reporter {
@@ -99,6 +89,26 @@ pub struct ClassMetrics {
     pub support: usize,
 }
 
+impl ClassMetrics {
+    pub fn new_overall(
+        average: OverallAverage,
+        precision: f32,
+        recall: f32,
+        fscore: f32,
+        support: usize,
+    ) -> Self {
+        let class = average.to_string();
+        ClassMetrics {
+            class,
+            average: average.into(),
+            precision,
+            recall,
+            fscore,
+            support,
+        }
+    }
+}
+
 // impl PartialOrd for ClassMetrics {
 //     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
 //         let cmp_average = self.average.partial_cmp(&other.average);
@@ -113,24 +123,10 @@ pub struct ClassMetrics {
 /// The Classmetrics struct acts as a line in a dataframe when displayed.
 impl Display for ClassMetrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.average {
-            Average::None => write!(
-                f,
-                "{}, {}, {}, {}, {}",
-                self.class, self.precision, self.recall, self.fscore, self.support
-            ),
-            _ => write!(
-                f,
-                "{}_{}, {}, {}, {}, {}",
-                self.class, self.average, self.precision, self.recall, self.fscore, self.support
-            ),
-        }
+        write!(
+            f,
+            "{}, {}, {}, {}, {}",
+            self.class, self.precision, self.recall, self.fscore, self.support
+        )
     }
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_name() {}
 }
