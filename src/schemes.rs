@@ -322,7 +322,7 @@ impl SchemeType {
     }
 
     fn try_auto_detect_scheme_by_prefix(config: &AutoDetectConfig) -> Result<SchemeType, AutoDetectError>{
-       odo!()
+       todo!()
     }
     fn list_possible_schemes() -> AHashSet<SchemeType> {
         all::<SchemeType>().collect()
