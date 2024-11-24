@@ -1,6 +1,10 @@
-use crate::reporter::{ClassMetrics, Reporter};
+/**
+This module computes the metrics (precision, recall, f-score, support) of a ground-truth
+sequence and a predicted sequence.
+*/
+use crate::reporter::{ClassMetricsInner, Reporter};
 use crate::schemes::TryFromVecStrict;
-use crate::{ConversionError, Entities, SchemeType};
+use crate::schemes::{ConversionError, Entities, SchemeType};
 use core::fmt;
 use itertools::multizip;
 use ndarray::{prelude::*, Array, Data, ScalarOperand, Zip};
@@ -68,7 +72,11 @@ impl Display for Metric {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum DivisionByZeroStrategy {
+/// How do we handle cases with a division by zero? Do we replace the denominator by 1, return an
+/// error, or replace the division result with 0? SeqEval uses by default the `ReplaceBy0`
+/// strategy. It is not recommended to use the ReturnError; it will stop the computation. It can be
+/// useful if you believe there should be no 0 in the denominator.
+pub enum DivByZeroStrat {
     /// Replace denominator equal to `0` by `1` for the calculations
     ReplaceBy1,
     /// Returns an error
@@ -76,7 +84,7 @@ pub enum DivisionByZeroStrategy {
     /// Returns 0 when the denominator is 0
     ReplaceBy0,
 }
-impl Default for DivisionByZeroStrategy {
+impl Default for DivByZeroStrat {
     fn default() -> Self {
         Self::ReplaceBy1
     }
@@ -96,12 +104,12 @@ impl<S: Debug + Display> Display for ParsingDivisionByZeroStrategyError<S> {
 }
 impl<S: Debug + Display> Error for ParsingDivisionByZeroStrategyError<S> {}
 
-impl FromStr for DivisionByZeroStrategy {
+impl FromStr for DivByZeroStrat {
     type Err = ParsingDivisionByZeroStrategyError<String>;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_ref() {
-            "replaceby1" | "replacebyone" => Ok(DivisionByZeroStrategy::ReplaceBy1),
-            "returnerror" | "error" => Ok(DivisionByZeroStrategy::ReturnError),
+            "replaceby1" | "replacebyone" => Ok(DivByZeroStrat::ReplaceBy1),
+            "returnerror" | "error" => Ok(DivByZeroStrat::ReturnError),
             _ => Err(ParsingDivisionByZeroStrategyError(String::from(s))),
         }
     }
@@ -192,7 +200,7 @@ fn prf_divide<I: Debug + Num + Clone + Send + Sync + Copy, D: Dimension>(
     numerator: ArcArray<I, D>,
     denominator: ArrayViewMut<I, D>,
     parallel: bool,
-    zero_division: DivisionByZeroStrategy,
+    zero_division: DivByZeroStrat,
 ) -> Result<ArcArray<I, D>, DivisionByZeroError> {
     let (mut result, zero_mask) = if parallel {
         par_prf_divide_results_and_mask(numerator, denominator)
@@ -201,8 +209,8 @@ fn prf_divide<I: Debug + Num + Clone + Send + Sync + Copy, D: Dimension>(
     };
 
     match zero_division {
-        DivisionByZeroStrategy::ReturnError => Err(DivisionByZeroError),
-        DivisionByZeroStrategy::ReplaceBy1 => {
+        DivByZeroStrat::ReturnError => Err(DivisionByZeroError),
+        DivByZeroStrat::ReplaceBy1 => {
             if parallel {
                 result = par_replace(result, I::zero(), I::one());
             } else {
@@ -210,7 +218,7 @@ fn prf_divide<I: Debug + Num + Clone + Send + Sync + Copy, D: Dimension>(
             }
             Ok(result)
         }
-        DivisionByZeroStrategy::ReplaceBy0 => {
+        DivByZeroStrat::ReplaceBy0 => {
             let final_result = result * zero_mask;
             Ok(final_result)
         }
@@ -401,8 +409,8 @@ type PrecisionRecallFScoreTrueSum = (
     Array<usize, Dim<[usize; 1]>>,
 );
 
-/// Main entrypoint of the Rusev library. This function computes the precision, recall, fscore and
-/// support of the true and predicted tokens.
+/// One of the main entrypoints of the Rusev library. This function computes the precision, recall,
+/// fscore and support of the true and predicted tokens.
 ///
 /// * `y_true`: True tokens
 /// * `y_pred`: Predicted tokens
@@ -414,16 +422,16 @@ type PrecisionRecallFScoreTrueSum = (
 /// * `suffix`: What char to use as suffix?
 /// * `delimiter`: What delimiter are we using to differentiate the prefix from
 ///   the rest of the tag.
-/// * `parallel`: Can we use parallelism for computations?
+/// * `parallel`: Can we use multiple cores for computations?
 /// * `entities_true`: Optional entities used to reduce the computation load.
 /// * `entities_pred`: Optional entities used to reduce the computation load.
-pub fn precision_recall_fscore_support<'a, F: FloatExt>(
+fn precision_recall_fscore_support<'a, F: FloatExt>(
     y_true: Vec<Vec<&'a str>>,
     y_pred: Vec<Vec<&'a str>>,
     beta: F,
     average: Average,
     sample_weight: Option<ArcArray<f32, Dim<[usize; 1]>>>,
-    zero_division: DivisionByZeroStrategy,
+    zero_division: DivByZeroStrat,
     scheme: SchemeType,
     suffix: bool,
     delimiter: char,
@@ -484,7 +492,7 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
             let tmp_weights = true_sum;
             if tmp_weights.sum() == 0 {
                 match zero_division {
-                    DivisionByZeroStrategy::ReturnError => {
+                    DivByZeroStrat::ReturnError => {
                         return Err(ComputationError::DivisionByZero(DivisionByZeroError))
                     }
                     _ => {
@@ -598,29 +606,45 @@ fn par_replace<Data: PartialEq + Send + Sync + Copy, D: Dimension>(
     array
 }
 
+/// Main entrypoint of the Rusev library. This function computes the precision, recall, fscore and
+/// support of the true and predicted tokens. It returns information about the individual classes
+/// and different overall averages. The returned structure can be used to prettyprint the results.
+///
+/// * `y_true`: True tokens
+/// * `y_pred`: Predicted tokens
+/// * `beta`: Value of the `beta` parameter of the fscore. `beta=1` for F1 and `beta=0.5` for F0.5.
+/// * `average`: What type of average to use.
+/// * `sample_weight`: Optional weights of the samples.
+/// * `zero_division`: What to do in case of division by zero.
+/// * `scheme`: What scheme are we using?
+/// * `suffix`: What char to use as suffix?
+/// * `delimiter`: What delimiter are we using to differentiate the prefix from
+///   the rest of the tag? The most common delimiter is `-`.
+/// * `parallel`: Can we use multiple cores for matrix computations?
 pub fn classification_report<'a>(
     y_true: Vec<Vec<&'a str>>,
     y_pred: Vec<Vec<&'a str>>,
-    sample_weight: Option<ArcArray<f32, Dim<[usize; 1]>>>,
-    zero_division: DivisionByZeroStrategy,
+    sample_weight: Option<Vec<f32>>,
+    zero_division: DivByZeroStrat,
     scheme: SchemeType,
     suffix: bool,
     delimiter: char,
     parallel: bool,
 ) -> Result<Reporter, ComputationError<&'a str>> {
     check_consistent_length(y_true.as_ref(), y_pred.as_ref())?;
+    let sample_weight_array = sample_weight.map(|x| ArcArray::from_vec(x));
     let entities_true = Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter, None)?;
     let entities_pred = Entities::try_from_vecs_strict(y_pred, scheme, suffix, delimiter, None)?;
     let entities_true_unique_tags = &entities_true.unique_tags();
     let tmp_ahash_set = &entities_pred.unique_tags();
     let unsorted_target_names = tmp_ahash_set | entities_true_unique_tags;
-    let target_names_sorted_iter = BTreeSet::from_iter(unsorted_target_names); // NOTE: Is it a good idea to convert to BTreeSet? What about a vec? A custom structure?
+    let target_names_sorted_iter = BTreeSet::from_iter(unsorted_target_names);
     let (p, r, f1, s) = precision_recall_fscore_support::<f32>(
         vec![vec![]], // We use the entities_pred/true instead of the vecs of tokens
         vec![vec![]],
         1.0,
         Average::None,
-        sample_weight.clone(), //inexpensive to clone!
+        sample_weight_array.clone(), //inexpensive to clone!
         zero_division,
         scheme,
         suffix,
@@ -637,7 +661,7 @@ pub fn classification_report<'a>(
         f1.into_iter(),
         s.into_iter(),
     )) {
-        let tmp_metrics = ClassMetrics {
+        let tmp_metrics = ClassMetricsInner {
             class: String::from(*name),
             precision,
             recall,
@@ -659,7 +683,7 @@ pub fn classification_report<'a>(
             vec![vec![]],
             1.0,
             avg.into(),
-            sample_weight.clone(),
+            sample_weight_array.clone(),
             zero_division,
             scheme,
             suffix,
@@ -669,29 +693,11 @@ pub fn classification_report<'a>(
             Some(&entities_pred),
         )?;
         let tmp_metrics =
-            ClassMetrics::new_overall(avg, p.item()?, r.item()?, f1.item()?, s.item()?);
+            ClassMetricsInner::new_overall(avg, p.item()?, r.item()?, f1.item()?, s.item()?);
         reporter.insert(tmp_metrics);
     }
     Ok(reporter)
 }
-
-//     average_options = ("micro", "macro", "weighted")
-//     for average in average_options:
-//         avg_p, avg_r, avg_f1, support = precision_recall_fscore_support(
-//             y_true,
-//             y_pred,
-//             average=average,
-//             sample_weight=sample_weight,
-//             zero_division=zero_division,
-//             scheme=scheme,
-//             suffix=suffix,
-//             entities_true=entities_true,
-//             entities_pred=entities_pred,
-//         )
-//         reporter.write("{} avg".format(average), avg_p, avg_r, avg_f1, support)
-//     reporter.write_blank()
-
-//     return reporter.report()
 
 #[cfg(test)]
 mod tests {
@@ -699,7 +705,7 @@ mod tests {
         fn are_close(&self, other: &Self, eps: f32) -> bool;
     }
     // ClassMetrics does not have the default PartialEq implementation.
-    impl CloseEnough for ClassMetrics {
+    impl CloseEnough for ClassMetricsInner {
         fn are_close(&self, other: &Self, eps: f32) -> bool {
             let are_equal = self == other;
             let precision_is_equal = f32::abs(self.precision - other.precision) < eps;
@@ -715,7 +721,7 @@ mod tests {
     }
     impl CloseEnough for Reporter {
         fn are_close(&self, other: &Self, eps: f32) -> bool {
-            for (c1, c2) in self.iter().zip(other.iter()) {
+            for (c1, c2) in self.classes.iter().zip(other.classes.iter()) {
                 let are_close = c1.are_close(c2, eps);
                 if !are_close {
                     return false;
@@ -734,7 +740,7 @@ mod tests {
             y_true,
             y_pred,
             None,
-            DivisionByZeroStrategy::ReplaceBy0,
+            DivByZeroStrat::ReplaceBy0,
             SchemeType::IOB2,
             false,
             '-',
@@ -744,7 +750,7 @@ mod tests {
         {
             let expected = Reporter {
                 classes: BTreeSet::from_iter(vec![
-                    ClassMetrics {
+                    ClassMetricsInner {
                         class: String::from("A"),
                         fscore: 0.6666666666666666,
                         precision: 1.0,
@@ -752,7 +758,7 @@ mod tests {
                         support: 2,
                         average: Average::None,
                     },
-                    ClassMetrics {
+                    ClassMetricsInner {
                         class: String::from("B"),
                         fscore: 1.0,
                         precision: 1.0,
@@ -760,7 +766,7 @@ mod tests {
                         support: 1,
                         average: Average::None,
                     },
-                    ClassMetrics {
+                    ClassMetricsInner {
                         class: String::from("C"),
                         fscore: 0.0,
                         precision: 0.0,
@@ -768,21 +774,21 @@ mod tests {
                         support: 0,
                         average: Average::None,
                     },
-                    ClassMetrics::new_overall(
+                    ClassMetricsInner::new_overall(
                         OverallAverage::Macro,
                         0.66666666666666,
                         0.5,
                         0.55555555555555,
                         3,
                     ),
-                    ClassMetrics::new_overall(
+                    ClassMetricsInner::new_overall(
                         OverallAverage::Micro,
                         0.66666666666666,
                         0.66666666666666,
                         0.66666666666666,
                         3,
                     ),
-                    ClassMetrics::new_overall(
+                    ClassMetricsInner::new_overall(
                         OverallAverage::Weighted,
                         1.0,
                         0.66666666666666,
@@ -853,7 +859,7 @@ mod tests {
                 y_true,
                 y_pred,
                 None,
-                DivisionByZeroStrategy::ReplaceBy1,
+                DivByZeroStrat::ReplaceBy1,
                 SchemeType::IOB2,
                 false,
                 '-',
@@ -878,7 +884,7 @@ mod tests {
             y_true,
             y_pred,
             None,
-            DivisionByZeroStrategy::ReplaceBy0,
+            DivByZeroStrat::ReplaceBy0,
             SchemeType::IOB2,
             false,
             '-',
@@ -984,7 +990,7 @@ PER, 1, 1, 1, 1\n";
             1.0,
             Average::Macro,
             None,
-            DivisionByZeroStrategy::ReplaceBy0,
+            DivByZeroStrat::ReplaceBy0,
             SchemeType::IOB2,
             false,
             '-',
@@ -1008,7 +1014,7 @@ PER, 1, 1, 1, 1\n";
             1.0,
             Average::Micro,
             None,
-            DivisionByZeroStrategy::ReplaceBy0,
+            DivByZeroStrat::ReplaceBy0,
             SchemeType::IOB2,
             false,
             '-',
@@ -1044,7 +1050,7 @@ PER, 1, 1, 1, 1\n";
                 1.0,
                 avg,
                 None,
-                DivisionByZeroStrategy::ReplaceBy0,
+                DivByZeroStrat::ReplaceBy0,
                 SchemeType::IOB2,
                 false,
                 '-',
