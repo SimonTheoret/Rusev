@@ -3,18 +3,26 @@ This module computes the metrics (precision, recall, f-score, support) of a grou
 sequence and a predicted sequence.
 */
 use crate::reporter::{ClassMetricsInner, Reporter};
-use crate::schemes::TryFromVecStrict;
-use crate::schemes::{ConversionError, Entities, SchemeType};
+use crate::schemes::{
+    get_entities_lenient, ConversionError, Entities, InvalidToken, ParsingPrefixError, SchemeType,
+    TryFromVecStrict,
+};
+use ahash::{HashMap as AHashMap, HashSet as AHashSet};
 use core::fmt;
 use itertools::multizip;
 use ndarray::{prelude::*, Array, Data, ScalarOperand, Zip};
 use ndarray_stats::{errors::MultiInputError, SummaryStatisticsExt};
 use num::{Float, Num, NumCast};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
-use std::error::Error;
-use std::fmt::{Debug, Display};
-use std::str::FromStr;
+use std::{
+    borrow::Borrow,
+    cmp,
+    collections::BTreeSet,
+    error::Error,
+    fmt::{Debug, Display},
+    mem::ManuallyDrop,
+    str::FromStr,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArrayNotUniqueOrEmpty(usize);
@@ -273,7 +281,7 @@ fn extract_tp_actual_correct_strict<'a>(
     delimiter: char,
     entities_true: Option<&Entities<'a>>,
     entities_pred: Option<&Entities<'a>>,
-) -> Result<ActualTPCorrect<usize>, ComputationError<&'a str>> {
+) -> Result<ActualTPCorrect<usize>, ComputationError<String>> {
     let entities_true_res = match entities_true {
         Some(e) => e,
         None => &Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter, None)?,
@@ -312,18 +320,82 @@ fn extract_tp_actual_correct_strict<'a>(
 fn extract_tp_actual_correct_lenient<'a>(
     y_true: Vec<Vec<&'a str>>,
     y_pred: Vec<Vec<&'a str>>,
-    scheme: SchemeType,
+    _scheme: SchemeType,
     suffix: bool,
     delimiter: char,
     entities_true: Option<&Entities<'a>>,
     entities_pred: Option<&Entities<'a>>,
-) -> Result<ActualTPCorrect<usize>, ComputationError<&'a str>> {
-    let entities_true_iter =
-        Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter, None)?.into_iter();
+) -> Result<ActualTPCorrect<usize>, ComputationError<String>> {
+    let entities_true_tmp = match entities_true {
+        Some(v) => v,
+        None => &get_entities_lenient(y_true.as_ref(), suffix, delimiter)?,
+    };
+    let mut entities_true_init: AHashMap<&str, AHashSet<(usize, usize)>> = AHashMap::default();
+    for e in entities_true_tmp.iter().flatten() {
+        let (start, end) = (e.start.clone(), e.end.clone());
+        match entities_true_init.get_mut(e.tag.as_ref()) {
+            Some(set) => {
+                set.insert((start, end));
+            }
+            None => {
+                let mut tmp_set: AHashSet<(usize, usize)> = AHashSet::default();
+                tmp_set.insert((start, end));
+                entities_true_init.insert(e.tag.borrow(), tmp_set);
+            }
+        }
+    }
+    let entities_pred_tmp = match entities_pred {
+        Some(v) => v,
+        None => &get_entities_lenient(y_pred.as_ref(), suffix, delimiter)?,
+    };
+    let mut entities_pred_init: AHashMap<&str, AHashSet<(usize, usize)>> = AHashMap::default();
+    for e in entities_pred_tmp.iter().flatten() {
+        let (start, end) = (e.start.clone(), e.end.clone());
+        match entities_pred_init.get_mut(e.tag.as_ref()) {
+            Some(set) => {
+                set.insert((start, end));
+            }
+            None => {
+                let mut tmp_set: AHashSet<(usize, usize)> = AHashSet::default();
+                tmp_set.insert((start, end));
+                entities_pred_init.insert(e.tag.borrow(), tmp_set);
+            }
+        }
+    }
+    let y_pred_keys_set = BTreeSet::from_iter(entities_true_init.keys());
+    let y_true_keys_set = BTreeSet::from_iter(entities_true_init.keys());
+    let target_name = y_pred_keys_set.union(&y_true_keys_set);
+    let max_size = cmp::max(y_pred_keys_set.len(), y_true_keys_set.len());
+    let mut tp_sum = Vec::with_capacity(max_size);
+    let mut pred_sum = Vec::with_capacity(max_size);
+    let mut true_sum = Vec::with_capacity(max_size);
 
-    let entities_pred_iter =
-        Entities::try_from_vecs_strict(y_pred, scheme, suffix, delimiter, None)?.into_iter();
-    todo!()
+    for type_name in target_name {
+        let true_sum_len = entities_true_init
+            .get(*type_name)
+            .map(|s| s.len())
+            .unwrap_or(0);
+        true_sum.push(true_sum_len);
+        let pred_sum_len = entities_pred_init
+            .get(**type_name)
+            .map(|s| s.len())
+            .unwrap_or(0);
+        pred_sum.push(pred_sum_len);
+        let tp_sum_len = entities_pred_init
+            .get(**type_name)
+            .map(|s| s.len())
+            .unwrap_or(0)
+            & entities_pred_init
+                .get(**type_name)
+                .map(|s| s.len())
+                .unwrap_or(0);
+        tp_sum.push(tp_sum_len);
+    }
+    return Ok((
+        Array::from(true_sum),
+        Array::from(tp_sum),
+        Array::from(pred_sum),
+    ));
 }
 
 // entities_true = defaultdict(set)
@@ -344,6 +416,8 @@ fn extract_tp_actual_correct_lenient<'a>(
 //     tp_sum = np.append(tp_sum, len(entities_true_type & entities_pred_type))
 //     pred_sum = np.append(pred_sum, len(entities_pred_type))
 //     true_sum = np.append(true_sum, len(entities_true_type))
+//
+// return pred_sum, tp_sum, true_sum
 
 #[derive(Debug, Clone, PartialEq)]
 /// Enum error encompassing many type of failures that could happen when computing the precison,
@@ -357,6 +431,7 @@ pub enum ComputationError<S: AsRef<str> + std::fmt::Debug> {
     InputError(MultiInputError),
     EmptyArray(String),
     EmptyOrNotUnique(ArrayNotUniqueOrEmpty),
+    OwnedConversionError(ConversionError<String>),
 }
 impl<S: AsRef<str> + std::fmt::Debug> Display for ComputationError<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -369,10 +444,25 @@ impl<S: AsRef<str> + std::fmt::Debug> Display for ComputationError<S> {
             Self::InputError(input_err) => std::fmt::Display::fmt(&input_err, f),
             Self::EmptyArray(empty_err) => write!(f, "Found an empty array in {}", empty_err),
             Self::EmptyOrNotUnique(size_err) => std::fmt::Display::fmt(size_err, f),
+            Self::OwnedConversionError(conv_err) => std::fmt::Display::fmt(&conv_err, f),
         }
     }
 }
 impl<S: AsRef<str> + std::fmt::Debug> Error for ComputationError<S> {}
+
+impl<S: AsRef<str> + std::fmt::Debug> From<ParsingPrefixError<S>> for ComputationError<S> {
+    fn from(value: ParsingPrefixError<S>) -> Self {
+        let tmp_value = ConversionError::from(value);
+        Self::ConversionError(tmp_value)
+    }
+}
+
+impl<S: AsRef<str> + std::fmt::Debug> From<InvalidToken> for ComputationError<S> {
+    fn from(value: InvalidToken) -> Self {
+        let tmp_value = ConversionError::from(value);
+        Self::ConversionError(tmp_value)
+    }
+}
 
 impl<S: AsRef<str> + std::fmt::Debug> From<InconsistentLengthError> for ComputationError<S> {
     fn from(value: InconsistentLengthError) -> Self {
@@ -409,6 +499,12 @@ type PrecisionRecallFScoreTrueSum = (
     Array<usize, Dim<[usize; 1]>>,
 );
 
+impl<S: AsRef<str> + Debug> ComputationError<S> {
+    pub(crate) fn from_str_parsing_error(err: ParsingPrefixError<&str>) -> ComputationError<S> {
+        ComputationError::OwnedConversionError(ConversionError::from(err.internal_to_owned()))
+    }
+}
+
 /// One of the main entrypoints of the Rusev library. This function computes the precision, recall,
 /// fscore and support of the true and predicted tokens.
 ///
@@ -438,20 +534,32 @@ fn precision_recall_fscore_support<'a, F: FloatExt>(
     parallel: bool,
     entities_true: Option<&Entities<'a>>,
     entities_pred: Option<&Entities<'a>>,
-) -> Result<PrecisionRecallFScoreTrueSum, ComputationError<&'a str>> {
+    strict: bool,
+) -> Result<PrecisionRecallFScoreTrueSum, ComputationError<String>> {
     if beta.is_sign_negative() {
         return Err(ComputationError::BetaNotPositive);
     };
-    check_consistent_length(&y_true, &y_pred)?;
-    let (mut pred_sum, mut tp_sum, mut true_sum) = extract_tp_actual_correct_strict(
-        y_true,
-        y_pred,
-        scheme,
-        suffix,
-        delimiter,
-        entities_true,
-        entities_pred,
-    )?;
+    let (mut pred_sum, mut tp_sum, mut true_sum) = if strict {
+        extract_tp_actual_correct_strict(
+            y_true,
+            y_pred,
+            scheme,
+            suffix,
+            delimiter,
+            entities_true,
+            entities_pred,
+        )?
+    } else {
+        extract_tp_actual_correct_lenient(
+            y_true,
+            y_pred,
+            scheme,
+            suffix,
+            delimiter,
+            entities_true,
+            entities_pred,
+        )?
+    };
     let beta2 = beta.powi(2);
     if matches!(average, Average::Micro) {
         tp_sum = array![tp_sum.sum()];
@@ -630,11 +738,20 @@ pub fn classification_report<'a>(
     suffix: bool,
     delimiter: char,
     parallel: bool,
-) -> Result<Reporter, ComputationError<&'a str>> {
+    strict: bool,
+) -> Result<Reporter, ComputationError<String>> {
     check_consistent_length(y_true.as_ref(), y_pred.as_ref())?;
     let sample_weight_array = sample_weight.map(|x| ArcArray::from_vec(x));
-    let entities_true = Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter, None)?;
-    let entities_pred = Entities::try_from_vecs_strict(y_pred, scheme, suffix, delimiter, None)?;
+    let entities_true = if strict {
+        Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter, None)?
+    } else {
+        get_entities_lenient(y_true.as_ref(), suffix, delimiter)?
+    };
+    let entities_pred = if strict {
+        Entities::try_from_vecs_strict(y_pred, scheme, suffix, delimiter, None)?
+    } else {
+        get_entities_lenient(y_pred.as_ref(), suffix, delimiter)?
+    };
     let entities_true_unique_tags = &entities_true.unique_tags();
     let tmp_ahash_set = &entities_pred.unique_tags();
     let unsorted_target_names = tmp_ahash_set | entities_true_unique_tags;
@@ -652,6 +769,7 @@ pub fn classification_report<'a>(
         parallel,
         Some(&entities_true),
         Some(&entities_pred),
+        strict,
     )?;
     let mut reporter = Reporter::default();
     for (name, precision, recall, fscore, support) in multizip((
@@ -691,6 +809,7 @@ pub fn classification_report<'a>(
             parallel,
             Some(&entities_true),
             Some(&entities_pred),
+            strict,
         )?;
         let tmp_metrics =
             ClassMetricsInner::new_overall(avg, p.item()?, r.item()?, f1.item()?, s.item()?);
@@ -745,6 +864,7 @@ mod tests {
             false,
             '-',
             false,
+            true,
         )
         .unwrap();
         {
@@ -834,7 +954,7 @@ mod tests {
         let test_cases: Vec<(
             Vec<Vec<&str>>,
             Vec<Vec<&str>>,
-            Result<Reporter, ComputationError<&str>>,
+            Result<Reporter, ComputationError<String>>,
         )> = vec![
             (
                 vec![vec!["B-PER"], vec!["I-PER"]],
@@ -864,6 +984,7 @@ mod tests {
                 false,
                 '-',
                 true,
+                true,
             );
             // .expect_err("There was no error here!");
             assert_eq!(actual, expected)
@@ -888,6 +1009,7 @@ mod tests {
             SchemeType::IOB2,
             false,
             '-',
+            true,
             true,
         );
         let reporter_unwrapped = reporter.unwrap();
@@ -997,6 +1119,7 @@ PER, 1, 1, 1, 1\n";
             true,
             None,
             None,
+            true,
         )
         .unwrap();
         assert_eq!(
@@ -1021,6 +1144,7 @@ PER, 1, 1, 1, 1\n";
             true,
             None,
             None,
+            true,
         )
         .unwrap();
         assert_eq!(
@@ -1057,40 +1181,11 @@ PER, 1, 1, 1, 1\n";
                 true,
                 None,
                 None,
+                true,
             )
             .unwrap();
             let actual = f1.item().unwrap();
             assert_eq!(actual, expected)
         }
-        // @pytest.mark.parametrize(
-        //     'average, expected',
-        //     [
-        //         (None, np.array([1])),
-        //         ('micro', 1),
-        //         ('macro', 1),
-        //         ('weighted', 1)
-        //     ]
-        // )
-        // def test_conll_f1score(self, average, expected):
-        //     y_true = [['B-ORG', 'I-ORG']]
-        //     y_pred = [['I-ORG', 'I-ORG']]
-        //     f = f1_score(y_true, y_pred, average=average)
-        //     assert f == expected
     }
-    // >> from seqeval.metrics.v1 import precision_recall_fscore_support
-    // >>> from seqeval.scheme import IOB2
-    // >>> y_true = [['O', 'O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
-    // >>> y_pred = [['O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
-    // >>> precision_recall_fscore_support(y_true, y_pred, average='macro', scheme=IOB2)
-    // (0.5, 0.5, 0.5, 2)
-    // >>> precision_recall_fscore_support(y_true, y_pred, average='micro', scheme=IOB2)
-    // (0.5, 0.5, 0.5, 2)
-    // >>> precision_recall_fscore_support(y_true, y_pred, average='weighted', scheme=IOB2)
-    // (0.5, 0.5, 0.5, 2)
-    //
-    // It is possible to compute per-label precisions, recalls, F1-scores and
-    // supports instead of averaging:
-    //
-    // >>> precision_recall_fscore_support(y_true, y_pred, average=None, scheme=IOB2)
-    // (array([0., 1.]), array([0., 1.]), array([0., 1.]), array([1, 1]))
 }

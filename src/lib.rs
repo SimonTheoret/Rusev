@@ -14,6 +14,7 @@ the same named entity.
 end of the chunk.
 * BILOU/IOBES: 'E' and 'L' denotes `Last` or `Ending` character in a sequence and 'S' denotes a
 single element  and 'U' a unit element.
+The BILOU and IOBES schemes are only supported in strict mode.
 ## More information about schemes
 * [Wikipedia](https://en.wikipedia.org/wiki/Inside%E2%80%93outside%E2%80%93beginning_(tagging))
 * [Article](https://cs229.stanford.edu/proj2005/KrishnanGanapathy-NamedEntityRecognition.pdf), chapter 2
@@ -34,7 +35,7 @@ mod reporter;
 mod schemes;
 
 // The public api starts here
-pub use schemes::{Prefix, SchemeType};
+pub use schemes::SchemeType;
 
 pub use metrics::{
     classification_report, ComputationError,

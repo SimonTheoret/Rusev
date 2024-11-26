@@ -2,15 +2,17 @@
 This modules gives the tooling necessary to parse a sequence of tokens into a list of entities.
 */
 use ahash::AHashSet;
-use enum_iterator::{all, cardinality, Sequence};
+use enum_iterator::{all, Sequence};
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::error::Error;
 use std::fmt::{Debug, Display};
-use std::mem::take;
+use std::mem::{take, ManuallyDrop};
 use std::ops::{Deref, DerefMut};
+use std::slice::Iter;
 use std::str::FromStr;
+use std::vec::IntoIter;
 use std::{borrow::Cow, cell::RefCell};
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -20,9 +22,20 @@ use unicode_segmentation::UnicodeSegmentation;
 #[derive(Debug, Hash, Clone, PartialEq, Eq, PartialOrd)]
 pub struct Entity<'a> {
     sent_id: Option<usize>,
-    start: usize,
-    end: usize,
-    tag: Cow<'a, str>,
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    pub(crate) tag: Cow<'a, str>,
+}
+
+impl<'a> Entity<'a> {
+    pub(crate) fn new(sent_id: Option<usize>, start: usize, end: usize, tag: Cow<'a, str>) -> Self {
+        Entity {
+            sent_id,
+            start,
+            end,
+            tag,
+        }
+    }
 }
 
 impl<'a> Display for Entity<'a> {
@@ -37,7 +50,10 @@ impl<'a> Display for Entity<'a> {
 
 impl<'a> Entity<'a> {
     pub fn as_tuple(&'a self) -> (Option<usize>, usize, usize, &'a str) {
-        (self.sent_id, self.start, self.end, self.tag.as_ref())
+        (self.sent_id, self.start, self.end, self.tag.borrow())
+    }
+    pub fn consume_as_tuple(self) -> (Option<usize>, usize, usize, Cow<'a, str>) {
+        (self.sent_id, self.start, self.end, self.tag)
     }
 }
 
@@ -45,7 +61,7 @@ impl<'a> Entity<'a> {
 /// Prefix represent an annotation specifying the place of a token in a chunk. For example, in
 /// `IOB1`, the `I` prefix is used to indicate that the token is inside a NER. Prefix can only be
 /// a single ascii character.
-pub enum Prefix {
+pub(crate) enum Prefix {
     I,
     O,
     B,
@@ -87,16 +103,19 @@ impl<S: AsRef<str>> Display for ParsingPrefixError<S> {
 impl<S: AsRef<str> + Error> Error for ParsingPrefixError<S> {}
 
 impl FromStr for Prefix {
-    type Err = ParsingPrefixError<&'static str>;
+    type Err = ParsingPrefixError<String>;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::try_from_with_static_error(s)
     }
 }
+impl ParsingPrefixError<&str> {
+    pub(crate) fn internal_to_owned(self) -> ParsingPrefixError<String> {
+        ParsingPrefixError(self.0.to_string())
+    }
+}
 
 impl<'a> Prefix {
-    fn try_from_with_static_error(
-        value: &'a str,
-    ) -> Result<Self, ParsingPrefixError<&'static str>> {
+    fn try_from_with_static_error(value: &'a str) -> Result<Self, ParsingPrefixError<String>> {
         match value {
             "I" => Ok(Prefix::I),
             "O" => Ok(Prefix::O),
@@ -105,7 +124,7 @@ impl<'a> Prefix {
             "S" => Ok(Prefix::S),
             "U" => Ok(Prefix::U),
             "L" => Ok(Prefix::L),
-            _ => Err(ParsingPrefixError(String::from(value).leak())),
+            _ => Err(ParsingPrefixError(String::from(value))),
         }
     }
 }
@@ -137,8 +156,11 @@ enum Tag {
 
 #[derive(Debug, PartialEq, Hash, Clone)]
 struct InnerToken<'a> {
+    /// The full token, such as `"B-PER"`, `"I-LOC"`, etc.
     token: Cow<'a, str>,
+    /// The prefix, such as `B`, `I`, `O`, etc.
     prefix: Prefix,
+    /// The tag, such as '"PER"', '"LOC"'
     tag: Cow<'a, str>,
 }
 
@@ -152,8 +174,7 @@ impl<'a> Default for InnerToken<'a> {
     }
 }
 
-// TODO: Move this enum into its own module, as to hide its `new` function.
-///
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 /// This enum represents the positon of the Prefix in a token (a Cow<'_, str>).
 enum UnicodeIndex {
     /// This variant indicates that the prefix is located at the start of the token
@@ -163,10 +184,10 @@ enum UnicodeIndex {
 }
 impl UnicodeIndex {
     fn new<I: Iterator>(suffix: bool, unicode_iterator: I) -> Self {
-        if !suffix {
-            UnicodeIndex::Start(0)
+        if suffix {
+            UnicodeIndex::End(unicode_iterator.count() - 1)
         } else {
-            UnicodeIndex::End(unicode_iterator.count())
+            UnicodeIndex::Start(0)
         }
     }
     fn to_index(&self) -> usize {
@@ -188,19 +209,23 @@ impl<'a> InnerToken<'a> {
         token: Cow<'a, str>,
         suffix: bool,
         delimiter: char,
-    ) -> Result<Self, ParsingPrefixError<&'a str>> {
+    ) -> Result<Self, ParsingPrefixError<String>> {
         let ref_iter = token.graphemes(true);
         let unicode_index = UnicodeIndex::new(suffix, ref_iter);
         let (char_index, prefix_char) = token
             .grapheme_indices(true)
             .nth(unicode_index.to_index())
-            .ok_or(ParsingPrefixError("None"))?;
+            .ok_or(ParsingPrefixError(String::from("None")))?;
         let prefix = Prefix::from_str(prefix_char)?;
         let tag_before_strip = match unicode_index {
             UnicodeIndex::Start(_) => &token[char_index + 1..],
             UnicodeIndex::End(_) => &token[..char_index],
         };
-        let tag = Cow::Owned(String::from(tag_before_strip.trim_matches(delimiter)));
+        // mutable to allow to reasign after
+        let mut tag = Cow::Owned(String::from(tag_before_strip.trim_matches(delimiter)));
+        if tag == "" {
+            tag = Cow::Borrowed("_");
+        }
         Ok(Self { token, prefix, tag })
     }
 
@@ -246,6 +271,170 @@ pub enum SchemeType {
     BILOU,
 }
 
+/// Leniently retrieves the entities from a sequence.
+pub(crate) fn get_entities_lenient<'a>(
+    sequence: &'a [Vec<&'a str>],
+    suffix: bool,
+    delimiter: char,
+) -> Result<Entities<'a>, ParsingPrefixError<String>> {
+    let mut res = vec![];
+    for vec_of_chunks in sequence.iter() {
+        let vec_of_entities: Result<Vec<_>, _> =
+            LenientChunkIter::new(vec_of_chunks, suffix, delimiter).collect();
+        res.push(vec_of_entities?)
+    }
+    Ok(Entities(res))
+}
+
+/// This wrapper around the content iterator appends a single `"O"` at the end of its inner
+/// iterator.
+struct InnerLenientChunkIter<'a> {
+    content: Iter<'a, &'a str>,
+    is_at_end: bool,
+}
+impl<'a> InnerLenientChunkIter<'a> {
+    fn new(seq: &'a [&'a str]) -> Self {
+        InnerLenientChunkIter {
+            content: seq.iter(),
+            is_at_end: false,
+        }
+    }
+}
+impl<'a> Iterator for InnerLenientChunkIter<'a> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<Self::Item> {
+        let next_value = self.content.next();
+        if next_value.is_none() {
+            match self.is_at_end {
+                true => None,
+                false => {
+                    self.is_at_end = true;
+                    Some("O")
+                }
+            }
+        } else {
+            next_value.map(|v| &**v)
+        }
+    }
+}
+
+/// This struct iterates over a *single* sequence and returns the chunks associated with it.
+struct LenientChunkIter<'a> {
+    /// The content on which we are iterating
+    inner: InnerLenientChunkIter<'a>,
+    /// The prefix of the previous chunk (e.g. 'I')
+    prev_prefix: Prefix,
+    /// The type of the previous chunk (e.g. `"PER"`)
+    prev_type: Option<Cow<'a, str>>,
+    begin_offset: usize,
+    suffix: bool,
+    delimiter: char,
+    index: usize,
+}
+
+impl<'a> LenientChunkIter<'a> {
+    fn new(sequence: &'a [&'a str], suffix: bool, delimiter: char) -> Self {
+        LenientChunkIter {
+            inner: InnerLenientChunkIter::new(sequence),
+            prev_type: None,
+            prev_prefix: Prefix::O,
+            begin_offset: 0,
+            suffix,
+            delimiter,
+            index: 0,
+        }
+    }
+}
+
+impl<'a> Iterator for LenientChunkIter<'a> {
+    type Item = Result<Entity<'a>, ParsingPrefixError<String>>;
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let current_chunk = self.inner.next()?; // no more chunks. We are done
+            let mut inner_token =
+                match InnerToken::new(Cow::from(current_chunk), self.suffix, self.delimiter) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        self.index += 1;
+                        return Some(Err(e));
+                    }
+                };
+            let ret: Option<Self::Item>;
+            if self.end_of_chunk(&inner_token.prefix, &inner_token.tag) {
+                ret = Some(Ok(Entity::new(
+                    None,
+                    self.begin_offset,
+                    self.index - 1,
+                    take(&mut self.prev_type).unwrap(),
+                )));
+                self.prev_prefix = inner_token.prefix;
+                self.prev_type = Some(inner_token.tag);
+                self.index += 1;
+                return ret;
+            };
+            if self.start_of_chunk(&inner_token.prefix, &inner_token.tag) {
+                self.begin_offset = self.index;
+            };
+            self.prev_prefix = inner_token.prefix;
+            self.prev_type = Some(take(&mut inner_token.tag));
+            self.index += 1;
+        }
+    }
+}
+impl<'a> LenientChunkIter<'a> {
+    //     tag -> prefix
+    //     type -> classe
+    ///     """Checks if a chunk ended between the previous and current word.
+    fn end_of_chunk(&self, current_prefix: &Prefix, current_type: &Cow<'a, str>) -> bool {
+        let wrapped_type = Some(current_type);
+        // Cloning a prefix is very inexpensive
+        match (self.prev_prefix.clone(), current_prefix) {
+            (Prefix::E, _) => true,
+            (Prefix::S, _) => true,
+            (Prefix::B, Prefix::B) => true,
+            (Prefix::B, Prefix::S) => true,
+            (Prefix::B, Prefix::O) => true,
+            (Prefix::I, Prefix::B) => true,
+            (Prefix::I, Prefix::S) => true,
+            (Prefix::I, Prefix::O) => true,
+            (self_prefix, _) => {
+                if !matches!(self_prefix, Prefix::O) && &self.prev_type.as_ref() != &wrapped_type {
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    ///     """Checks if a chunk started between the previous and current word.
+    fn start_of_chunk(&self, current_prefix: &Prefix, current_type: &Cow<'a, str>) -> bool {
+        let wrapped_type = Some(current_type);
+        match (self.prev_prefix.clone(), current_prefix) {
+            // Cloning a prefix is very inexpensive
+            (_, Prefix::B) => true,
+            (_, Prefix::S) => true,
+            (Prefix::E, Prefix::E) => true,
+            (Prefix::E, Prefix::I) => true,
+            (Prefix::S, Prefix::E) => true,
+            (Prefix::S, Prefix::I) => true,
+            (Prefix::O, Prefix::E) => true,
+            (Prefix::O, Prefix::I) => true,
+            (_, curr_prefix) => {
+                if !matches!(curr_prefix, Prefix::O) && &self.prev_type.as_ref() != &wrapped_type {
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+    }
+}
+//
+//     if tag != 'O' and tag != '.' and prev_type != type_:
+//         chunk_start = True
+//
+//     return chunk_start
 #[derive(Debug, PartialEq, Eq)]
 pub enum AutoDetectError {
     TooManySchemesParsed(AHashSet<SchemeType>),
@@ -283,7 +472,9 @@ impl<'a> TryFrom<AutoDetectConfig<'a>> for SchemeType {
 /// This impl block contains the logic of the auto-detect feature.
 impl SchemeType {
     /// This function incurs a runtime cost but it is called only once.
-    fn try_auto_detect_scheme_by_parsing(config: &AutoDetectConfig) -> Result<SchemeType, AutoDetectError> {
+    fn try_auto_detect_scheme_by_parsing(
+        config: &AutoDetectConfig,
+    ) -> Result<SchemeType, AutoDetectError> {
         let mut possible_schemes = Self::list_possible_schemes();
         for sequence in config.tokens.iter() {
             let possible_schemes_clone = possible_schemes.clone();
@@ -321,8 +512,10 @@ impl SchemeType {
         return Err(AutoDetectError::TooManySchemesParsed(possible_schemes));
     }
 
-    fn try_auto_detect_scheme_by_prefix(config: &AutoDetectConfig) -> Result<SchemeType, AutoDetectError>{
-       todo!()
+    fn try_auto_detect_scheme_by_prefix(
+        config: &AutoDetectConfig,
+    ) -> Result<SchemeType, AutoDetectError> {
+        todo!()
     }
     fn list_possible_schemes() -> AHashSet<SchemeType> {
         all::<SchemeType>().collect()
@@ -582,7 +775,8 @@ impl<'a> Token<'a> {
 /// This struct is capable of building efficiently the Tokens with a given outside_token. This
 /// iterator avoids reallocation and keeps good ergonomic inside the `new` function of `Tokens`.
 /// The `outside_token` field is the *last* token generated by this struct when calling `.next()`.
-/// This struct is used to parse the tokens into easier to use structs called `Token`s.
+/// This struct is used to parse the tokens into an easier to use structs called `Token`s. During
+/// iteration, it returns as last token the `'O'` tag.
 struct ExtendedTokensIterator<'a> {
     outside_token: Token<'a>,
     tokens: Vec<Cow<'a, str>>,
@@ -594,7 +788,7 @@ struct ExtendedTokensIterator<'a> {
     total_len: usize,
 }
 impl<'a> Iterator for ExtendedTokensIterator<'a> {
-    type Item = Result<Token<'a>, ParsingPrefixError<&'a str>>;
+    type Item = Result<Token<'a>, ParsingPrefixError<String>>;
     fn next(&mut self) -> Option<Self::Item> {
         let ret = match self.index.cmp(&self.total_len) {
             Ordering::Greater => None,
@@ -648,12 +842,12 @@ impl<'a> Tokens<'a> {
         suffix: bool,
         delimiter: char,
         sent_id: Option<usize>,
-    ) -> Result<Self, ParsingPrefixError<&'a str>> {
+    ) -> Result<Self, ParsingPrefixError<String>> {
         let outside_token_inner = InnerToken::new(Cow::Borrowed("O"), suffix, delimiter)?;
         let outside_token = Token::new(scheme, outside_token_inner);
         let tokens_iter =
             ExtendedTokensIterator::new(outside_token, tokens, scheme, suffix, delimiter);
-        let extended_tokens: Result<Vec<Token>, ParsingPrefixError<&str>> = tokens_iter.collect();
+        let extended_tokens: Result<Vec<Token>, ParsingPrefixError<String>> = tokens_iter.collect();
         match extended_tokens {
             Err(prefix_error) => Err(prefix_error),
             Ok(tokens) => Ok(Self {
@@ -842,6 +1036,17 @@ pub enum ConversionError<S: AsRef<str>> {
     ParsingPrefix(ParsingPrefixError<S>),
 }
 
+// impl ConversionError<&str> {
+//     pub(crate) fn to_string(self) -> ConversionError<String> {
+//         match self {
+//             Self::InvalidToken(t) => Self::InvalidToken(t),
+//             Self::ParsingPrefix(ParsingPrefixError(ref_str)) => {
+//                 Self::ParsingPrefix(ParsingPrefixError(ref_str.to_string()))
+//             }
+//         }
+//     }
+// }
+
 impl<S: AsRef<str>> From<InvalidToken> for ConversionError<S> {
     fn from(value: InvalidToken) -> Self {
         Self::InvalidToken(value)
@@ -891,6 +1096,10 @@ impl<'a> IntoIterator for Entities<'a> {
     }
 }
 
+// impl<'a> Entities<'a> {
+//     pub(crate) impl
+// }
+
 /// This trait mimics the TryFrom trait from the std lib. It is used
 /// to *try* to build an Entities structure. It can fail if there is a
 /// malformed token in `tokens`.
@@ -932,7 +1141,7 @@ pub(crate) trait TryFromVecLenient<'a, T: Into<&'a str>> {
 }
 
 impl<'a, T: Into<&'a str>> TryFromVecStrict<'a, T> for Entities<'a> {
-    type Error = ConversionError<&'a str>;
+    type Error = ConversionError<String>;
     fn try_from_vecs_strict(
         vec_of_tokens_2d: Vec<Vec<T>>,
         scheme: SchemeType,
@@ -940,7 +1149,7 @@ impl<'a, T: Into<&'a str>> TryFromVecStrict<'a, T> for Entities<'a> {
         delimiter: char,
         sent_id: Option<usize>,
     ) -> Result<Entities<'a>, Self::Error> {
-        let vec_of_tokens: Result<Vec<_>, ParsingPrefixError<&str>> = vec_of_tokens_2d
+        let vec_of_tokens: Result<Vec<_>, ParsingPrefixError<String>> = vec_of_tokens_2d
             .into_iter()
             .map(|v| v.into_iter().map(|x| Cow::from(x.into())).collect())
             .map(|v| Tokens::new(v, scheme, suffix, delimiter, sent_id))
@@ -958,7 +1167,7 @@ impl<'a, T: Into<&'a str>> TryFromVecStrict<'a, T> for Entities<'a> {
 
 impl<'a> Entities<'a> {
     /// Consumes the 2D array of vecs and builds the Entities.
-    fn new(entities: Vec<Vec<Entity<'a>>>) -> Self {
+    pub(crate) fn new(entities: Vec<Vec<Entity<'a>>>) -> Self {
         Entities(entities)
     }
 
@@ -1177,18 +1386,40 @@ mod test {
         println!("{:?}", tokens);
         assert_eq!(tokens.extended_tokens.len(), 5);
     }
+
+    #[test]
+    fn test_innertoken_new_with_suffix() {
+        let tokens = vec![
+            (Cow::from("PER-I"), Cow::from("PER"), Prefix::I),
+            (Cow::from("PER-B"), Cow::from("PER"), Prefix::B),
+            (Cow::from("LOC-I"), Cow::from("LOC"), Prefix::I),
+            (Cow::from("O"), Cow::from("_"), Prefix::O),
+        ];
+        let suffix = true;
+        let delimiter = '-';
+        for (i, (token, tag, prefix)) in tokens.into_iter().enumerate() {
+            let inner_token = InnerToken::new(token.clone(), suffix, delimiter).unwrap();
+            let expected_inner_token = InnerToken { token, prefix, tag };
+            dbg!(i);
+            assert_eq!(inner_token, expected_inner_token)
+        }
+    }
     #[test]
     fn test_innertoken_new() {
-        let token = Cow::from("B-PER");
+        let tokens = vec![
+            (Cow::from("I-PER"), Cow::from("PER"), Prefix::I),
+            (Cow::from("B-PER"), Cow::from("PER"), Prefix::B),
+            (Cow::from("I-LOC"), Cow::from("LOC"), Prefix::I),
+            (Cow::from("O"), Cow::from("_"), Prefix::O),
+        ];
         let suffix = false;
         let delimiter = '-';
-        let inner_token = InnerToken::new(token, suffix, delimiter).unwrap();
-        let expected_inner_token = InnerToken {
-            token: Cow::Borrowed("B-PER"),
-            prefix: Prefix::B,
-            tag: Cow::Owned(String::from("PER")),
-        };
-        assert_eq!(inner_token, expected_inner_token)
+        for (i, (token, tag, prefix)) in tokens.into_iter().enumerate() {
+            let inner_token = InnerToken::new(token.clone(), suffix, delimiter).unwrap();
+            let expected_inner_token = InnerToken { token, prefix, tag };
+            dbg!(i);
+            assert_eq!(inner_token, expected_inner_token)
+        }
     }
     #[test]
     fn test_unique_tags() {
@@ -1214,6 +1445,66 @@ mod test {
         assert_eq!(actual, expected)
     }
 
+    #[test]
+    fn test_get_entities_lenient() {
+        let seq = vec![vec!["B-PER", "I-PER", "O", "B-LOC"]];
+        let actual = get_entities_lenient(seq.as_ref(), false, '-').unwrap();
+        let entities = vec![vec![
+            Entity::new(None, 0, 1, Cow::from("PER")),
+            Entity::new(None, 3, 3, Cow::from("LOC")),
+        ]];
+        let expected = Entities::new(entities);
+        assert_eq!(actual, expected)
+    }
+
+    #[allow(non_snake_case)]
+    #[test]
+    fn test_LenientChunkIterator() {
+        let tokens = build_str_vec();
+        let iter = LenientChunkIter::new(tokens.as_ref(), false, '-');
+        let actual = iter.collect::<Vec<_>>();
+        let expected: Vec<Result<Entity, ParsingPrefixError<String>>> = vec![
+            Ok(Entity::new(None, 0, 1, Cow::Borrowed("PER"))),
+            Ok(Entity::new(None, 3, 3, Cow::Borrowed("LOC"))),
+        ];
+        assert_eq!(actual, expected)
+    }
+
+    #[test]
+    fn test_get_entities() {
+        let seq = vec![vec![
+            "O", "O", "O", "B-MISC", "I-MISC", "I-MISC", "O", "B-PER", "I-PER",
+        ]];
+        let binding = seq.clone();
+        let binding2 = get_entities_lenient(binding.as_ref(), false, '-').unwrap();
+        let actual = binding2
+            .0
+            .iter()
+            .flat_map(|v| v.iter())
+            .map(|e| e.as_tuple())
+            .collect::<Vec<_>>();
+        let expected: Vec<(Option<usize>, usize, usize, &str)> =
+            vec![(None, 3, 5, "MISC"), (None, 7, 8, "PER")];
+        assert_eq!(expected, actual)
+    }
+
+    #[test]
+    fn test_get_entities_with_suffix() {
+        let seq = vec![vec![
+            "O", "O", "O", "MISC-B", "MISC-I", "MISC-I", "O", "PER-B", "PER-I",
+        ]];
+        let binding = seq.clone();
+        let binding2 = get_entities_lenient(binding.as_ref(), true, '-').unwrap();
+        let actual = binding2
+            .0
+            .iter()
+            .flat_map(|v| v.iter())
+            .map(|e| e.as_tuple())
+            .collect::<Vec<_>>();
+        let expected: Vec<(Option<usize>, usize, usize, &str)> =
+            vec![(None, 3, 5, "MISC"), (None, 7, 8, "PER")];
+        assert_eq!(expected, actual)
+    }
     fn build_tokens() -> Tokens<'static> {
         let tokens = build_tokens_vec();
         let scheme = SchemeType::IOB2;
@@ -1228,9 +1519,6 @@ mod test {
             Cow::from("O"),
             Cow::from("B-LOC"),
         ]
-    }
-    fn build_str_vec_IOB2() -> Vec<&'static str> {
-        todo!()
     }
 
     fn build_str_vec() -> Vec<&'static str> {
