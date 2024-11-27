@@ -2,8 +2,6 @@
 This modules gives a few tools to prettyprint the output for all the classes and the overall
 metrics.
 */
-use crate::metrics::Average;
-use crate::metrics::OverallAverage;
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialOrd;
 use std::collections::{BTreeSet, HashSet};
@@ -207,5 +205,65 @@ impl Display for ClassMetricsInner {
             "{}, {}, {}, {}, {}",
             self.class, self.precision, self.recall, self.fscore, self.support
         )
+    }
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+pub enum Average {
+    None,
+    Micro,
+    Macro,
+    Weighted,
+    Samples,
+}
+impl Display for Average {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+/// Average implements partial ordering. This is used during the
+/// reporting to represent the ClassMetrics with an `average` other
+/// than `None` as `Greater` than those with `None`.
+impl PartialOrd for Average {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (Self::None, _) => Some(std::cmp::Ordering::Less),
+            (_, Self::None) => Some(std::cmp::Ordering::Greater),
+            _ => Some(std::cmp::Ordering::Equal),
+        }
+    }
+}
+impl Ord for Average {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+pub enum OverallAverage {
+    Micro,
+    Macro,
+    Weighted,
+}
+
+impl Display for OverallAverage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str_content = match self {
+            Self::Micro => "Overall_Micro",
+            Self::Macro => "Overall_Macro",
+            Self::Weighted => "Overall_Weighted",
+        };
+        write!(f, "{}", str_content)
+    }
+}
+
+impl From<OverallAverage> for Average {
+    fn from(value: OverallAverage) -> Self {
+        match value {
+            OverallAverage::Micro => Average::Micro,
+            OverallAverage::Macro => Average::Macro,
+            OverallAverage::Weighted => Average::Weighted,
+        }
     }
 }

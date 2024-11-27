@@ -2,7 +2,7 @@
 This module computes the metrics (precision, recall, f-score, support) of a ground-truth
 sequence and a predicted sequence.
 */
-use crate::reporter::{ClassMetricsInner, Reporter};
+use crate::reporter::{Average, ClassMetricsInner, OverallAverage, Reporter};
 use crate::schemes::{
     get_entities_lenient, ConversionError, Entities, InvalidToken, ParsingPrefixError, SchemeType,
     TryFromVecStrict,
@@ -13,7 +13,6 @@ use itertools::multizip;
 use ndarray::{prelude::*, Array, Data, ScalarOperand, Zip};
 use ndarray_stats::{errors::MultiInputError, SummaryStatisticsExt};
 use num::{Float, Num, NumCast};
-use serde::{Deserialize, Serialize};
 use std::{
     borrow::Borrow,
     cmp,
@@ -132,66 +131,6 @@ impl Display for DivisionByZeroError {
 }
 
 impl Error for DivisionByZeroError {}
-
-#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
-pub enum Average {
-    None,
-    Micro,
-    Macro,
-    Weighted,
-    Samples,
-}
-impl Display for Average {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-/// Average implements partial ordering. This is used during the
-/// reporting to represent the ClassMetrics with an `average` other
-/// than `None` as `Greater` than those with `None`.
-impl PartialOrd for Average {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match (self, other) {
-            (Self::None, _) => Some(std::cmp::Ordering::Less),
-            (_, Self::None) => Some(std::cmp::Ordering::Greater),
-            _ => Some(std::cmp::Ordering::Equal),
-        }
-    }
-}
-impl Ord for Average {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
-    }
-}
-
-#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
-pub enum OverallAverage {
-    Micro,
-    Macro,
-    Weighted,
-}
-
-impl Display for OverallAverage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let str_content = match self {
-            Self::Micro => "Overall_Micro",
-            Self::Macro => "Overall_Macro",
-            Self::Weighted => "Overall_Weighted",
-        };
-        write!(f, "{}", str_content)
-    }
-}
-
-impl From<OverallAverage> for Average {
-    fn from(value: OverallAverage) -> Self {
-        match value {
-            OverallAverage::Micro => Average::Micro,
-            OverallAverage::Macro => Average::Macro,
-            OverallAverage::Weighted => Average::Weighted,
-        }
-    }
-}
 
 /// Internal extension trait for Num's Float trait
 pub trait FloatExt: Float + Send + Sync + Clone + ScalarOperand + Debug {}
