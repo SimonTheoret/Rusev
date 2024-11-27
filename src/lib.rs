@@ -29,6 +29,8 @@ the letters of the scheme, such as I-O-B or I-O-E. Prefix can only be a single a
 * A chunk is list of at least one token associated with a named entity.
 * A Scheme gives us enough information to parse a list of tokens into a chunk.
 */
+//TODO: Add information about the different options, such as `strict`, `parallel`, `zero_division`,
+//`suffix`, `sample_weight`.
 
 mod metrics;
 mod reporter;
@@ -37,9 +39,6 @@ mod schemes;
 // The public api starts here
 pub use schemes::SchemeType;
 
-pub use metrics::{
-    classification_report, ComputationError,
-    DivByZeroStrat,
-};
+pub use metrics::{classification_report, ComputationError, DivByZeroStrat};
 
 pub use reporter::{ClassMetrics, Reporter};

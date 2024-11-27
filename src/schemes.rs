@@ -8,11 +8,10 @@ use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::error::Error;
 use std::fmt::{Debug, Display};
-use std::mem::{take, ManuallyDrop};
+use std::mem::take;
 use std::ops::{Deref, DerefMut};
 use std::slice::Iter;
 use std::str::FromStr;
-use std::vec::IntoIter;
 use std::{borrow::Cow, cell::RefCell};
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -45,15 +44,6 @@ impl<'a> Display for Entity<'a> {
             "({:?}, {}, {}, {})",
             self.sent_id, self.tag, self.start, self.end
         )
-    }
-}
-
-impl<'a> Entity<'a> {
-    pub fn as_tuple(&'a self) -> (Option<usize>, usize, usize, &'a str) {
-        (self.sent_id, self.start, self.end, self.tag.borrow())
-    }
-    pub fn consume_as_tuple(self) -> (Option<usize>, usize, usize, Cow<'a, str>) {
-        (self.sent_id, self.start, self.end, self.tag)
     }
 }
 
@@ -106,11 +96,6 @@ impl FromStr for Prefix {
     type Err = ParsingPrefixError<String>;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::try_from_with_static_error(s)
-    }
-}
-impl ParsingPrefixError<&str> {
-    pub(crate) fn internal_to_owned(self) -> ParsingPrefixError<String> {
-        ParsingPrefixError(self.0.to_string())
     }
 }
 
@@ -1122,22 +1107,6 @@ pub(crate) trait TryFromVecStrict<'a, T: Into<&'a str>> {
         delimiter: char,
         sent_id: Option<usize>,
     ) -> Result<Entities<'a>, Self::Error>;
-    fn try_from_convertible<C: Into<Vec<Vec<T>>>>(
-        tokens: C,
-        scheme: SchemeType,
-        suffix: bool,
-        delimiter: char,
-        sent_id: Option<usize>,
-    ) -> Result<Entities<'a>, Self::Error> {
-        let vec_of_vec_of_str: Vec<Vec<T>> = tokens.into();
-        Self::try_from_vecs_strict(vec_of_vec_of_str, scheme, suffix, delimiter, sent_id)
-    }
-}
-
-//TODO: Change the TryFromVec to another, better trait
-pub(crate) trait TryFromVecLenient<'a, T: Into<&'a str>> {
-    type Error: Error;
-    fn try_from_vecs_lenient();
 }
 
 impl<'a, T: Into<&'a str>> TryFromVecStrict<'a, T> for Entities<'a> {
@@ -1195,6 +1164,12 @@ impl<'a> Entities<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    impl<'a> Entity<'a> {
+        pub fn as_tuple(&'a self) -> (Option<usize>, usize, usize, &'a str) {
+            (self.sent_id, self.start, self.end, self.tag.borrow())
+        }
+    }
     #[test]
     fn test_entities_try_from() {
         let vec_of_tokens = vec![

@@ -20,7 +20,6 @@ use std::{
     collections::BTreeSet,
     error::Error,
     fmt::{Debug, Display},
-    mem::ManuallyDrop,
     str::FromStr,
 };
 
@@ -381,16 +380,22 @@ fn extract_tp_actual_correct_lenient<'a>(
             .map(|s| s.len())
             .unwrap_or(0);
         pred_sum.push(pred_sum_len);
-        let tp_sum_len = entities_pred_init
-            .get(**type_name)
-            .map(|s| s.len())
-            .unwrap_or(0)
-            & entities_pred_init
-                .get(**type_name)
-                .map(|s| s.len())
-                .unwrap_or(0);
-        tp_sum.push(tp_sum_len);
+        let tmp_pred_init_set = match entities_pred_init.get(**type_name) {
+            Some(set) => set,
+            None => &AHashSet::default(),
+        };
+        let tmp_true_init_set = match entities_true_init.get(**type_name) {
+            Some(set) => set,
+            None => &AHashSet::default(),
+        };
+        dbg!(tmp_true_init_set.clone());
+        dbg!(tmp_pred_init_set.clone());
+        let tp_sum_len = tmp_pred_init_set.intersection(tmp_true_init_set);
+        dbg!(tp_sum_len.clone().collect::<Vec<_>>());
+        tp_sum.push(tp_sum_len.count());
     }
+    dbg!(true_sum.clone());
+    dbg!(pred_sum.clone());
     return Ok((
         Array::from(true_sum),
         Array::from(tp_sum),
@@ -431,7 +436,6 @@ pub enum ComputationError<S: AsRef<str> + std::fmt::Debug> {
     InputError(MultiInputError),
     EmptyArray(String),
     EmptyOrNotUnique(ArrayNotUniqueOrEmpty),
-    OwnedConversionError(ConversionError<String>),
 }
 impl<S: AsRef<str> + std::fmt::Debug> Display for ComputationError<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -444,7 +448,6 @@ impl<S: AsRef<str> + std::fmt::Debug> Display for ComputationError<S> {
             Self::InputError(input_err) => std::fmt::Display::fmt(&input_err, f),
             Self::EmptyArray(empty_err) => write!(f, "Found an empty array in {}", empty_err),
             Self::EmptyOrNotUnique(size_err) => std::fmt::Display::fmt(size_err, f),
-            Self::OwnedConversionError(conv_err) => std::fmt::Display::fmt(&conv_err, f),
         }
     }
 }
@@ -499,12 +502,6 @@ type PrecisionRecallFScoreTrueSum = (
     Array<usize, Dim<[usize; 1]>>,
 );
 
-impl<S: AsRef<str> + Debug> ComputationError<S> {
-    pub(crate) fn from_str_parsing_error(err: ParsingPrefixError<&str>) -> ComputationError<S> {
-        ComputationError::OwnedConversionError(ConversionError::from(err.internal_to_owned()))
-    }
-}
-
 /// One of the main entrypoints of the Rusev library. This function computes the precision, recall,
 /// fscore and support of the true and predicted tokens.
 ///
@@ -521,6 +518,7 @@ impl<S: AsRef<str> + Debug> ComputationError<S> {
 /// * `parallel`: Can we use multiple cores for computations?
 /// * `entities_true`: Optional entities used to reduce the computation load.
 /// * `entities_pred`: Optional entities used to reduce the computation load.
+/// * `strict`: Are we using the strict mode.
 fn precision_recall_fscore_support<'a, F: FloatExt>(
     y_true: Vec<Vec<&'a str>>,
     y_pred: Vec<Vec<&'a str>>,
@@ -560,6 +558,7 @@ fn precision_recall_fscore_support<'a, F: FloatExt>(
             entities_pred,
         )?
     };
+    dbg!(&pred_sum, &tp_sum, &true_sum);
     let beta2 = beta.powi(2);
     if matches!(average, Average::Micro) {
         tp_sum = array![tp_sum.sum()];
@@ -1187,5 +1186,147 @@ PER, 1, 1, 1, 1\n";
             let actual = f1.item().unwrap();
             assert_eq!(actual, expected)
         }
+    }
+    #[test]
+    fn test_precision_recall_fscore_support_lenient_macro() {
+        let y_true = vec![
+            vec!["O", "O", "O", "B-MISC", "I-MISC", "I-MISC", "O"],
+            vec!["B-PER", "I-PER", "O"],
+        ];
+        let y_pred = vec![
+            vec!["O", "O", "B-MISC", "I-MISC", "I-MISC", "I-MISC", "O"],
+            vec!["B-PER", "I-PER", "O"],
+        ];
+        let (arr_p, arr_r, arr_f, arr_s) = precision_recall_fscore_support(
+            y_true,
+            y_pred,
+            1.0,
+            Average::Macro,
+            None,
+            DivByZeroStrat::ReplaceBy0,
+            SchemeType::IOB2,
+            false,
+            '-',
+            true,
+            None,
+            None,
+            false,
+        )
+        .unwrap();
+        let actual = (
+            arr_p.item().unwrap(),
+            arr_r.item().unwrap(),
+            arr_f.item().unwrap(),
+            arr_s.item().unwrap(),
+        );
+        let expected = (0.5, 0.5, 0.5, 2);
+        assert_eq!(actual, expected)
+    }
+    #[test]
+    fn test_precision_recall_fscore_support_lenient_micro() {
+        let y_true = vec![
+            vec!["O", "O", "O", "B-MISC", "I-MISC", "I-MISC", "O"],
+            vec!["B-PER", "I-PER", "O"],
+        ];
+        let y_pred = vec![
+            vec!["O", "O", "B-MISC", "I-MISC", "I-MISC", "I-MISC", "O"],
+            vec!["B-PER", "I-PER", "O"],
+        ];
+        let (arr_p, arr_r, arr_f, arr_s) = precision_recall_fscore_support(
+            y_true,
+            y_pred,
+            1.0,
+            Average::Micro,
+            None,
+            DivByZeroStrat::ReplaceBy0,
+            SchemeType::IOB2,
+            false,
+            '-',
+            true,
+            None,
+            None,
+            false,
+        )
+        .unwrap();
+        let actual = (
+            arr_p.item().unwrap(),
+            arr_r.item().unwrap(),
+            arr_f.item().unwrap(),
+            arr_s.item().unwrap(),
+        );
+        let expected = (0.5, 0.5, 0.5, 2);
+        assert_eq!(actual, expected)
+    }
+
+    #[test]
+    fn test_precision_recall_fscore_support_lenient_weighted() {
+        let y_true = vec![
+            vec!["O", "O", "O", "B-MISC", "I-MISC", "I-MISC", "O"],
+            vec!["B-PER", "I-PER", "O"],
+        ];
+        let y_pred = vec![
+            vec!["O", "O", "B-MISC", "I-MISC", "I-MISC", "I-MISC", "O"],
+            vec!["B-PER", "I-PER", "O"],
+        ];
+        let (arr_p, arr_r, arr_f, arr_s) = precision_recall_fscore_support(
+            y_true,
+            y_pred,
+            1.0,
+            Average::Weighted,
+            None,
+            DivByZeroStrat::ReplaceBy0,
+            SchemeType::IOB2,
+            false,
+            '-',
+            true,
+            None,
+            None,
+            false,
+        )
+        .unwrap();
+        let actual = (
+            arr_p.item().unwrap(),
+            arr_r.item().unwrap(),
+            arr_f.item().unwrap(),
+            arr_s.item().unwrap(),
+        );
+        let expected = (0.5, 0.5, 0.5, 2);
+        assert_eq!(actual, expected)
+    }
+
+    #[test]
+    fn test_precision_recall_fscore_support_lenient_no_average() {
+        let y_true = vec![
+            vec!["O", "O", "O", "B-MISC", "I-MISC", "I-MISC", "O"],
+            vec!["B-PER", "I-PER", "O"],
+        ];
+        let y_pred = vec![
+            vec!["O", "O", "B-MISC", "I-MISC", "I-MISC", "I-MISC", "O"],
+            vec!["B-PER", "I-PER", "O"],
+        ];
+        let (arr_p, arr_r, arr_f, arr_s) = precision_recall_fscore_support(
+            y_true,
+            y_pred,
+            1.0,
+            Average::None,
+            None,
+            DivByZeroStrat::ReplaceBy0,
+            SchemeType::IOB2,
+            false,
+            '-',
+            true,
+            None,
+            None,
+            false,
+        )
+        .unwrap();
+        let actual = (arr_p, arr_r, arr_f, arr_s);
+        let expected = (
+            array![0. as f32, 1. as f32],
+            array![0. as f32, 1. as f32],
+            array![0. as f32, 1. as f32],
+            array![1, 1],
+        );
+        assert_eq!(actual, expected)
     }
 }
