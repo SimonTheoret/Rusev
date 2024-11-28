@@ -1272,10 +1272,8 @@ impl<'a> Entities<'a> {
 #[cfg(test)]
 mod test {
 
-    use quickcheck::{self, TestResult};
-    #[macro_use(quickcheck)]
-    use quickcheck_macros::quickcheck as quickcheck_test;
     use super::*;
+    use quickcheck::{self, TestResult};
     use unicode_segmentation::UnicodeSegmentation;
 
     impl<'a> Entity<'a> {
@@ -1302,74 +1300,87 @@ mod test {
         }
     }
 
-    #[quickcheck_test]
-    fn propertie_test_new_token_len(
-        chars: Vec<char>,
-        prefix: UserPrefix,
-        suffix: bool,
-        delimiter: char,
-    ) -> TestResult {
-        let tag: String = chars.into_iter().collect();
-        if tag.len() == 0 {
-            return TestResult::discard();
-        };
-        let tag_len = tag.len();
-        dbg!(tag_len);
-        let token_string = if suffix {
-            tag + &String::from(delimiter) + &prefix.to_string()
-        } else {
-            prefix.to_string() + &String::from(delimiter) + &tag
-        };
-        let token = Cow::from(token_string);
-        dbg!(token.clone());
-        let inner_token_res = InnerToken::try_new(token, suffix, delimiter);
-        match inner_token_res {
-            Err(err) => match err {
-                ParsingError::PrefixError(s) => panic!("{}", ParsingError::PrefixError(s)),
-                ParsingError::EmptyToken => TestResult::discard(),
-            },
-            Ok(inner_token) => {
-                if inner_token.tag.len() == tag_len {
-                    TestResult::passed()
-                } else {
-                    TestResult::failed()
+    #[test]
+    fn test_propertie_test_new_token_len() {
+        fn propertie_test_new_token_len(
+            chars: Vec<char>,
+            prefix: UserPrefix,
+            suffix: bool,
+            delimiter: char,
+        ) -> TestResult {
+            let tag: String = chars.into_iter().collect();
+            if tag.len() == 0 {
+                return TestResult::discard();
+            };
+            let tag_len = tag.len();
+            dbg!(tag_len);
+            let token_string = if suffix {
+                tag + &String::from(delimiter) + &prefix.to_string()
+            } else {
+                prefix.to_string() + &String::from(delimiter) + &tag
+            };
+            let token = Cow::from(token_string);
+            dbg!(token.clone());
+            let inner_token_res = InnerToken::try_new(token, suffix, delimiter);
+            match inner_token_res {
+                Err(err) => match err {
+                    ParsingError::PrefixError(s) => panic!("{}", ParsingError::PrefixError(s)),
+                    ParsingError::EmptyToken => TestResult::discard(),
+                },
+                Ok(inner_token) => {
+                    if inner_token.tag.len() == tag_len {
+                        TestResult::passed()
+                    } else {
+                        TestResult::failed()
+                    }
                 }
             }
         }
+        let mut qc = quickcheck::QuickCheck::new().tests(2000);
+        qc.quickcheck(
+            propertie_test_new_token_len as fn(Vec<char>, UserPrefix, bool, char) -> TestResult,
+        );
     }
 
-    #[quickcheck_test]
-    fn propertie_test_new_token_prefix(
-        chars: Vec<char>,
-        prefix: UserPrefix,
-        suffix: bool,
-        delimiter: char,
-    ) -> TestResult {
-        let tag: String = chars.into_iter().collect();
-        if tag.len() == 0 {
-            return TestResult::discard();
-        };
-        let token_string = if suffix {
-            tag + &String::from(delimiter) + &prefix.to_string()
-        } else {
-            prefix.to_string() + &String::from(delimiter) + &tag
-        };
-        let token = Cow::from(token_string);
-        dbg!(token.clone());
-        let inner_token_res = InnerToken::try_new(token, suffix, delimiter);
-        match inner_token_res {
-            Err(err) => match err {
-                ParsingError::PrefixError(s) => panic!("{}", ParsingError::PrefixError(s)),
-                ParsingError::EmptyToken => TestResult::discard(),
-            },
-            Ok(inner_token) => {
-                if inner_token.prefix == prefix {
-                    TestResult::passed()
-                } else {
-                    TestResult::failed()
+    #[test]
+    fn test_propertie_test_new_token_prefix() {
+        fn propertie_test_new_token_prefix(
+            chars: Vec<char>,
+            prefix: UserPrefix,
+            suffix: bool,
+            delimiter: char,
+        ) -> TestResult {
+            let tag: String = chars.into_iter().collect();
+            if tag.len() == 0 {
+                return TestResult::discard();
+            };
+            let token_string = if suffix {
+                tag + &String::from(delimiter) + &prefix.to_string()
+            } else {
+                prefix.to_string() + &String::from(delimiter) + &tag
+            };
+            let token = Cow::from(token_string);
+            dbg!(token.clone());
+            let inner_token_res = InnerToken::try_new(token, suffix, delimiter);
+            match inner_token_res {
+                Err(err) => match err {
+                    ParsingError::PrefixError(s) => panic!("{}", ParsingError::PrefixError(s)),
+                    ParsingError::EmptyToken => TestResult::discard(),
+                },
+                Ok(inner_token) => {
+                    if inner_token.prefix == prefix {
+                        TestResult::passed()
+                    } else {
+                        TestResult::failed()
+                    }
                 }
             }
         }
+
+        let mut qc = quickcheck::QuickCheck::new().tests(2000);
+        qc.quickcheck(
+            propertie_test_new_token_prefix as fn(Vec<char>, UserPrefix, bool, char) -> TestResult,
+        );
     }
 
     #[test]
@@ -1437,6 +1448,56 @@ mod test {
                 ]
             ]
         );
+    }
+
+    #[derive(Debug, PartialEq, Hash, Clone, Sequence, Eq)]
+    enum TokensToTest {
+        BPER,
+        BGEO,
+        BLOC,
+        O,
+    }
+    impl From<TokensToTest> for &str {
+        fn from(value: TokensToTest) -> Self {
+            match value {
+                TokensToTest::BPER => "B-PER",
+                TokensToTest::BLOC => "B-LOC",
+                TokensToTest::BGEO => "B-GEO",
+                TokensToTest::O => "O",
+            }
+        }
+    }
+    impl quickcheck::Arbitrary for TokensToTest {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            let mut choice_slice: Vec<TokensToTest> = all::<TokensToTest>().collect();
+            // Removes the `ALL` prefix
+            choice_slice.swap_remove(choice_slice.len() - 1);
+            g.choose(choice_slice.as_ref()).unwrap().clone()
+        }
+    }
+
+    #[test]
+    fn test_propertie_entities_try_from() {
+        #[allow(non_snake_case)]
+        fn propertie_entities_try_from_vecs_strict_IO_only(
+            tokens: Vec<Vec<TokensToTest>>,
+        ) -> TestResult {
+            let tok = tokens;
+            let entities =
+                Entities::try_from_vecs_strict(tok, SchemeType::IOB2, false, '-', None).unwrap();
+            for entity in entities {
+                let diff = entity.end - entity.start;
+                if diff != 1 {
+                    return TestResult::failed();
+                };
+            }
+            TestResult::passed()
+        }
+        let mut qc = quickcheck::QuickCheck::new().tests(2000);
+        qc.quickcheck(
+            propertie_entities_try_from_vecs_strict_IO_only
+                as fn(Vec<Vec<TokensToTest>>) -> TestResult,
+        )
     }
 
     #[test]
