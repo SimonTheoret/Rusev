@@ -251,7 +251,8 @@ impl<'a> Default for InnerToken<'a> {
 enum PrefixCharIndex {
     /// This variant indicates that the prefix is located at the start of the token
     Start(usize),
-    /// This variant indicates that the prefix is located at the end of the token
+    /// This variant indicates that the prefix is located at the end of the token and contains the
+    /// number of chars in the token.
     End(usize, usize),
 }
 impl PrefixCharIndex {
@@ -302,20 +303,22 @@ impl<'a> InnerToken<'a> {
         // .ok_or()?;
         // let prefix = UserPrefix::try_from(prefix_char)?;
         let tag_before_strip = match prefix_index_struct {
-            PrefixCharIndex::Start(_) => token.chars().skip(2).collect::<String>(), /* .collect::<&str>(), */
-            PrefixCharIndex::End(_, count) if count >= 2 => token
+            PrefixCharIndex::Start(_) => token.chars().skip(2).collect::<Cow<str>>(),
+            PrefixCharIndex::End(_, _count @ 1) => token.clone(),
+            PrefixCharIndex::End(_, _count @ 2) => {
+                return Err(ParsingError::PrefixError(String::from(token)))
+            }
+            PrefixCharIndex::End(_, count) => token
                 .chars()
                 .enumerate()
                 .take_while(|(i, _)| i < &(count - 2))
                 .map(|(_, c)| c)
-                .collect::<String>(),
-            //count > 0 due to PrefixCharIndex::try_new
-            PrefixCharIndex::End(_, count) if count < 2 => String::from(token), // PrefixCharIndex::End(_) => token.chars().rev().skip(2).rev().collect::<String>(),
+                .collect::<Cow<str>>(),
         };
         // tag is mutable only to allow to reasign after
 
         //TODO: Strip in an intellligent way: probably use index to avoid trimming many matches.
-        let mut tag = Cow::Owned(tag_before_strip);
+        let mut tag = tag_before_strip;
         if tag == "" {
             tag = Cow::Borrowed("_");
         }
@@ -1576,7 +1579,7 @@ mod test {
             (Cow::from("PER-I"), Cow::from("PER"), UserPrefix::I),
             (Cow::from("PER-B"), Cow::from("PER"), UserPrefix::B),
             (Cow::from("LOC-I"), Cow::from("LOC"), UserPrefix::I),
-            (Cow::from("O"), Cow::from("_"), UserPrefix::O),
+            (Cow::from("O"), Cow::from("O"), UserPrefix::O),
         ];
         let suffix = true;
         let delimiter = '-';
