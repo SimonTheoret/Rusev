@@ -13,7 +13,6 @@ use std::ops::{Deref, DerefMut};
 use std::slice::Iter;
 use std::str::FromStr;
 use std::{borrow::Cow, cell::RefCell};
-use unicode_segmentation::UnicodeSegmentation;
 
 /// An entity represent a named objet in named entity recognition (NER). It contains a start and an
 /// end(i.e. at what index of the list does it starts and ends) and a tag, which the associated
@@ -1277,6 +1276,7 @@ mod test {
     #[macro_use(quickcheck)]
     use quickcheck_macros::quickcheck as quickcheck_test;
     use super::*;
+    use unicode_segmentation::UnicodeSegmentation;
 
     impl<'a> Entity<'a> {
         pub fn as_tuple(&'a self) -> (Option<usize>, usize, usize, &'a str) {
