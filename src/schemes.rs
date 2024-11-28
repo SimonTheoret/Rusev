@@ -48,9 +48,86 @@ impl<'a> Display for Entity<'a> {
 }
 
 #[derive(Debug, PartialEq, Hash, Clone, Sequence, Eq)]
+/// The inner prefix are the actual prefix that can be supplied by the user. All user prefix are of
+/// length 1 (as a unicode char and regular char).
+enum UserPrefix {
+    I,
+    O,
+    B,
+    E,
+    S,
+    U,
+    L,
+}
+
+impl FromStr for UserPrefix {
+    type Err = ParsingError<String>;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "I" => Ok(Self::I),
+            "O" => Ok(Self::O),
+            "B" => Ok(Self::B),
+            "E" => Ok(Self::E),
+            "S" => Ok(Self::S),
+            "U" => Ok(Self::U),
+            "L" => Ok(Self::L),
+            _ => Err(ParsingError::PrefixError(String::from(s))),
+        }
+    }
+}
+
+impl TryFrom<char> for UserPrefix {
+    type Error = ParsingError<String>;
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        match value {
+            'I' => Ok(Self::I),
+            'O' => Ok(Self::O),
+            'B' => Ok(Self::B),
+            'E' => Ok(Self::E),
+            'S' => Ok(Self::S),
+            'U' => Ok(Self::U),
+            'L' => Ok(Self::L),
+            _ => Err(ParsingError::PrefixError(String::from(value))),
+        }
+    }
+}
+
+impl UserPrefix {
+    fn as_str(&self) -> &str {
+        match self {
+            UserPrefix::I => "I",
+            UserPrefix::O => "O",
+            UserPrefix::B => "B",
+            UserPrefix::E => "E",
+            UserPrefix::S => "S",
+            UserPrefix::U => "U",
+            UserPrefix::L => "L",
+        }
+    }
+
+    fn len_in_bytes(&self) -> usize {
+        self.clone().as_str().len()
+    }
+}
+
+impl From<UserPrefix> for Prefix {
+    fn from(value: UserPrefix) -> Self {
+        match value {
+            UserPrefix::I => Self::I,
+            UserPrefix::O => Self::O,
+            UserPrefix::B => Self::B,
+            UserPrefix::E => Self::E,
+            UserPrefix::S => Self::S,
+            UserPrefix::U => Self::U,
+            UserPrefix::L => Self::L,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Hash, Clone, Sequence, Eq)]
 /// Prefix represent an annotation specifying the place of a token in a chunk. For example, in
-/// `IOB1`, the `I` prefix is used to indicate that the token is inside a NER. Prefix can only be
-/// a single ascii character.
+/// `IOB1`, the `I` prefix is used to indicate that the token is inside a NER. Prefix can only be a
+/// single ascii character.
 pub(crate) enum Prefix {
     I,
     O,
@@ -59,8 +136,23 @@ pub(crate) enum Prefix {
     S,
     U,
     L,
+    /// The `ANY` prefix is more of a marker than a real prefix. It is not suppposed to be supplied
+    /// by the user.
     Any,
 }
+
+impl Display for UserPrefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl Display for Prefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 impl Prefix {
     /// This functions verifies that this prefix and the other prefix are the same or one of them
     /// is the `PrefixAny` prefix.
@@ -78,29 +170,41 @@ impl Prefix {
 
 #[derive(Debug, Clone, PartialEq)]
 /// Could not parse the string into a `Prefix`
-pub struct ParsingPrefixError<S: AsRef<str>>(S);
+pub enum ParsingError<S: AsRef<str>> {
+    PrefixError(S),
+    EmptyToken,
+}
 
-impl<S: AsRef<str>> Display for ParsingPrefixError<S> {
+impl<S: AsRef<str>> Display for ParsingError<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let content = self.0.as_ref();
-        write!(
-            f,
-            "Could not parse the following string into a Prefix: {}",
-            content
-        )
+        match self {
+            Self::PrefixError(s) => {
+                let content = s.as_ref();
+                write!(
+                    f,
+                    "Could not parse the following string into a Prefix: {}",
+                    content
+                )
+            }
+            Self::EmptyToken => {
+                write!(f, "Received an empty string/&str")
+            }
+        }
     }
 }
-impl<S: AsRef<str> + Error> Error for ParsingPrefixError<S> {}
+impl<S: AsRef<str> + Error> Error for ParsingError<S> {}
 
+//TODO: Remove this impl and use UserPrefix instead
 impl FromStr for Prefix {
-    type Err = ParsingPrefixError<String>;
+    type Err = ParsingError<String>;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::try_from_with_static_error(s)
     }
 }
 
+//TODO: Remove this impl and use UserPrefix instead
 impl<'a> Prefix {
-    fn try_from_with_static_error(value: &'a str) -> Result<Self, ParsingPrefixError<String>> {
+    fn try_from_with_static_error(value: &'a str) -> Result<Self, ParsingError<String>> {
         match value {
             "I" => Ok(Prefix::I),
             "O" => Ok(Prefix::O),
@@ -109,25 +213,7 @@ impl<'a> Prefix {
             "S" => Ok(Prefix::S),
             "U" => Ok(Prefix::U),
             "L" => Ok(Prefix::L),
-            _ => Err(ParsingPrefixError(String::from(value))),
-        }
-    }
-}
-
-impl TryFrom<String> for Prefix {
-    type Error = ParsingPrefixError<String>;
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        let ref_val = value.as_ref();
-        match ref_val {
-            "I" => Ok(Prefix::I),
-            "O" => Ok(Prefix::O),
-            "B" => Ok(Prefix::B),
-            "E" => Ok(Prefix::E),
-            "S" => Ok(Prefix::S),
-            "U" => Ok(Prefix::U),
-            "L" => Ok(Prefix::L),
-            "ANY" => Ok(Prefix::Any),
-            _ => Err(ParsingPrefixError(value)),
+            _ => Err(ParsingError::PrefixError(String::from(value))),
         }
     }
 }
@@ -144,7 +230,7 @@ struct InnerToken<'a> {
     /// The full token, such as `"B-PER"`, `"I-LOC"`, etc.
     token: Cow<'a, str>,
     /// The prefix, such as `B`, `I`, `O`, etc.
-    prefix: Prefix,
+    prefix: UserPrefix,
     /// The tag, such as '"PER"', '"LOC"'
     tag: Cow<'a, str>,
 }
@@ -153,61 +239,83 @@ impl<'a> Default for InnerToken<'a> {
     fn default() -> Self {
         InnerToken {
             token: Cow::Borrowed(""),
-            prefix: Prefix::I,
+            prefix: UserPrefix::I,
             tag: Cow::Borrowed(""),
         }
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
-/// This enum represents the positon of the Prefix in a token (a Cow<'_, str>).
-enum UnicodeIndex {
+/// This enum represents the positon of the Prefix in a token. It assumes the length (unicode char)
+/// of the prefix is 1.
+enum PrefixCharIndex {
     /// This variant indicates that the prefix is located at the start of the token
     Start(usize),
     /// This variant indicates that the prefix is located at the end of the token
-    End(usize),
+    End(usize, usize),
 }
-impl UnicodeIndex {
-    fn new<I: Iterator>(suffix: bool, unicode_iterator: I) -> Self {
+impl PrefixCharIndex {
+    fn try_new<'a>(suffix: bool, token: &'a Cow<'a, str>) -> Result<Self, ParsingError<String>> {
         if suffix {
-            UnicodeIndex::End(unicode_iterator.count() - 1)
+            let count = token.as_ref().chars().count();
+            if count == 0 {
+                return Err(ParsingError::EmptyToken);
+            }
+            Ok(PrefixCharIndex::End(count - 1, count))
         } else {
-            UnicodeIndex::Start(0)
+            Ok(PrefixCharIndex::Start(0))
         }
     }
     fn to_index(&self) -> usize {
         match self {
             Self::Start(start) => *start,
-            Self::End(end) => *end,
+            Self::End(end, _) => *end,
         }
     }
 }
 
 impl<'a> InnerToken<'a> {
-    /// Create InnerToken
+    /// Create an InnerToken
     ///
-    /// * `token`: str or String to parse the InnerToken from
-    /// * `suffix`: Marker indicating if prefix is located at the end (when suffix is true) or the
-    ///    end (when suffix is false) of the token
-    /// * `delimiter`: Indicates the char used to separate the Prefix from the rest of the tag
-    fn new(
+    /// * `token`: str or String to parse the InnerToken from * `suffix`: Marker indicating if
+    /// prefix is located at the end (when suffix is true) or the end (when suffix is false) of the
+    /// token * `delimiter`: Indicates the char used to separate the Prefix from the rest of the
+    /// tag
+    fn try_new(
         token: Cow<'a, str>,
         suffix: bool,
         delimiter: char,
-    ) -> Result<Self, ParsingPrefixError<String>> {
-        let ref_iter = token.graphemes(true);
-        let unicode_index = UnicodeIndex::new(suffix, ref_iter);
-        let (char_index, prefix_char) = token
-            .grapheme_indices(true)
-            .nth(unicode_index.to_index())
-            .ok_or(ParsingPrefixError(String::from("None")))?;
-        let prefix = Prefix::from_str(prefix_char)?;
-        let tag_before_strip = match unicode_index {
-            UnicodeIndex::Start(_) => &token[char_index + 1..],
-            UnicodeIndex::End(_) => &token[..char_index],
+    ) -> Result<Self, ParsingError<String>> {
+        //1. Identify where is the `Prefix` located
+        let prefix_index_struct = PrefixCharIndex::try_new(suffix, &token)?;
+        let prefix_char_index = prefix_index_struct.to_index();
+        let char_res = token.chars().nth(prefix_char_index);
+        // let (prefix_index, prefix_char) = token.char_indices().nth(prefix_char_index);
+        // .ok_or();
+        // NOTE: Might be better as an ok_or_else()
+        let prefix = match char_res {
+            Some(c) => UserPrefix::try_from(c)?,
+            None => return Err(ParsingError::PrefixError(String::from(token))),
         };
-        // mutable to allow to reasign after
-        let mut tag = Cow::Owned(String::from(tag_before_strip.trim_matches(delimiter)));
+        // .grapheme_indices(true)
+        // .nth(unicode_index.to_index())
+        // .ok_or()?;
+        // let prefix = UserPrefix::try_from(prefix_char)?;
+        let tag_before_strip = match prefix_index_struct {
+            PrefixCharIndex::Start(_) => token.chars().skip(2).collect::<String>(), /* .collect::<&str>(), */
+            PrefixCharIndex::End(_, count) if count >= 2 => token
+                .chars()
+                .enumerate()
+                .take_while(|(i, _)| i < &(count - 2))
+                .map(|(_, c)| c)
+                .collect::<String>(),
+            //count > 0 due to PrefixCharIndex::try_new
+            PrefixCharIndex::End(_, count) if count < 2 => String::from(token), // PrefixCharIndex::End(_) => token.chars().rev().skip(2).rev().collect::<String>(),
+        };
+        // tag is mutable only to allow to reasign after
+
+        //TODO: Strip in an intellligent way: probably use index to avoid trimming many matches.
+        let mut tag = Cow::Owned(tag_before_strip);
         if tag == "" {
             tag = Cow::Borrowed("_");
         }
@@ -233,8 +341,8 @@ impl<'a> InnerToken<'a> {
         patterns_to_check: &[(Prefix, Prefix, Tag)],
     ) -> bool {
         for (prev_prefix, current_prefix, tag_cond) in patterns_to_check {
-            if prev_prefix.are_the_same_or_contains_any(&prev.prefix)
-                && current_prefix.are_the_same_or_contains_any(&self.prefix)
+            if prev_prefix.are_the_same_or_contains_any(&Prefix::from(prev.prefix.clone()))
+                && current_prefix.are_the_same_or_contains_any(&Prefix::from(self.prefix.clone()))
                 && self.check_tag(prev, tag_cond)
             {
                 return true;
@@ -261,7 +369,7 @@ pub(crate) fn get_entities_lenient<'a>(
     sequence: &'a [Vec<&'a str>],
     suffix: bool,
     delimiter: char,
-) -> Result<Entities<'a>, ParsingPrefixError<String>> {
+) -> Result<Entities<'a>, ParsingError<String>> {
     let mut res = vec![];
     for vec_of_chunks in sequence.iter() {
         let vec_of_entities: Result<Vec<_>, _> =
@@ -308,7 +416,7 @@ struct LenientChunkIter<'a> {
     /// The content on which we are iterating
     inner: InnerLenientChunkIter<'a>,
     /// The prefix of the previous chunk (e.g. 'I')
-    prev_prefix: Prefix,
+    prev_prefix: UserPrefix,
     /// The type of the previous chunk (e.g. `"PER"`)
     prev_type: Option<Cow<'a, str>>,
     begin_offset: usize,
@@ -322,7 +430,7 @@ impl<'a> LenientChunkIter<'a> {
         LenientChunkIter {
             inner: InnerLenientChunkIter::new(sequence),
             prev_type: None,
-            prev_prefix: Prefix::O,
+            prev_prefix: UserPrefix::O,
             begin_offset: 0,
             suffix,
             delimiter,
@@ -332,12 +440,12 @@ impl<'a> LenientChunkIter<'a> {
 }
 
 impl<'a> Iterator for LenientChunkIter<'a> {
-    type Item = Result<Entity<'a>, ParsingPrefixError<String>>;
+    type Item = Result<Entity<'a>, ParsingError<String>>;
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let current_chunk = self.inner.next()?; // no more chunks. We are done
             let mut inner_token =
-                match InnerToken::new(Cow::from(current_chunk), self.suffix, self.delimiter) {
+                match InnerToken::try_new(Cow::from(current_chunk), self.suffix, self.delimiter) {
                     Ok(v) => v,
                     Err(e) => {
                         self.index += 1;
@@ -370,20 +478,22 @@ impl<'a> LenientChunkIter<'a> {
     //     tag -> prefix
     //     type -> classe
     ///     """Checks if a chunk ended between the previous and current word.
-    fn end_of_chunk(&self, current_prefix: &Prefix, current_type: &Cow<'a, str>) -> bool {
+    fn end_of_chunk(&self, current_prefix: &UserPrefix, current_type: &Cow<'a, str>) -> bool {
         let wrapped_type = Some(current_type);
         // Cloning a prefix is very inexpensive
         match (self.prev_prefix.clone(), current_prefix) {
-            (Prefix::E, _) => true,
-            (Prefix::S, _) => true,
-            (Prefix::B, Prefix::B) => true,
-            (Prefix::B, Prefix::S) => true,
-            (Prefix::B, Prefix::O) => true,
-            (Prefix::I, Prefix::B) => true,
-            (Prefix::I, Prefix::S) => true,
-            (Prefix::I, Prefix::O) => true,
+            (UserPrefix::E, _) => true,
+            (UserPrefix::S, _) => true,
+            (UserPrefix::B, UserPrefix::B) => true,
+            (UserPrefix::B, UserPrefix::S) => true,
+            (UserPrefix::B, UserPrefix::O) => true,
+            (UserPrefix::I, UserPrefix::B) => true,
+            (UserPrefix::I, UserPrefix::S) => true,
+            (UserPrefix::I, UserPrefix::O) => true,
             (self_prefix, _) => {
-                if !matches!(self_prefix, Prefix::O) && &self.prev_type.as_ref() != &wrapped_type {
+                if !matches!(self_prefix, UserPrefix::O)
+                    && &self.prev_type.as_ref() != &wrapped_type
+                {
                     true
                 } else {
                     false
@@ -393,20 +503,22 @@ impl<'a> LenientChunkIter<'a> {
     }
 
     ///     """Checks if a chunk started between the previous and current word.
-    fn start_of_chunk(&self, current_prefix: &Prefix, current_type: &Cow<'a, str>) -> bool {
+    fn start_of_chunk(&self, current_prefix: &UserPrefix, current_type: &Cow<'a, str>) -> bool {
         let wrapped_type = Some(current_type);
         match (self.prev_prefix.clone(), current_prefix) {
             // Cloning a prefix is very inexpensive
-            (_, Prefix::B) => true,
-            (_, Prefix::S) => true,
-            (Prefix::E, Prefix::E) => true,
-            (Prefix::E, Prefix::I) => true,
-            (Prefix::S, Prefix::E) => true,
-            (Prefix::S, Prefix::I) => true,
-            (Prefix::O, Prefix::E) => true,
-            (Prefix::O, Prefix::I) => true,
+            (_, UserPrefix::B) => true,
+            (_, UserPrefix::S) => true,
+            (UserPrefix::E, UserPrefix::E) => true,
+            (UserPrefix::E, UserPrefix::I) => true,
+            (UserPrefix::S, UserPrefix::E) => true,
+            (UserPrefix::S, UserPrefix::I) => true,
+            (UserPrefix::O, UserPrefix::E) => true,
+            (UserPrefix::O, UserPrefix::I) => true,
             (_, curr_prefix) => {
-                if !matches!(curr_prefix, Prefix::O) && &self.prev_type.as_ref() != &wrapped_type {
+                if !matches!(curr_prefix, UserPrefix::O)
+                    && &self.prev_type.as_ref() != &wrapped_type
+                {
                     true
                 } else {
                     false
@@ -479,9 +591,8 @@ impl SchemeType {
                             None,
                         )
                         .is_ok(),
-                        true => {
-                            unimplemented!("Method try_from_vecs_lenient is not yet implemented")
-                        }
+                        true => get_entities_lenient(&vec_of_tok, config.suffix, config.delimiter)
+                            .is_ok(),
                     };
                     if is_parsed {
                         continue;
@@ -529,12 +640,6 @@ enum Token<'a> {
     IOBES { token: InnerToken<'a> },
     BILOU { token: InnerToken<'a> },
 }
-// impl<'a> Default for &'a mut Token<'a> {
-//     fn default() -> Self {
-//         // let token: InnerToken = InnerToken::default();
-//         Token::BILOU{token: InnerToken::default()}
-//     }
-// }
 
 impl<'a> Default for Token<'a> {
     fn default() -> Self {
@@ -709,7 +814,8 @@ impl<'a> Token<'a> {
     }
 
     fn is_valid(&self) -> bool {
-        self.allowed_prefixes().contains(&self.inner().prefix)
+        self.allowed_prefixes()
+            .contains(&Prefix::from(self.inner().prefix.clone()))
     }
 
     /// Check whether the current token is the start of chunk.
@@ -773,14 +879,14 @@ struct ExtendedTokensIterator<'a> {
     total_len: usize,
 }
 impl<'a> Iterator for ExtendedTokensIterator<'a> {
-    type Item = Result<Token<'a>, ParsingPrefixError<String>>;
+    type Item = Result<Token<'a>, ParsingError<String>>;
     fn next(&mut self) -> Option<Self::Item> {
         let ret = match self.index.cmp(&self.total_len) {
             Ordering::Greater => None,
             Ordering::Equal => Some(Ok(take(&mut self.outside_token))),
             Ordering::Less => {
                 let cow_str = unsafe { take(self.tokens.get_unchecked_mut(self.index)) };
-                let inner_token = InnerToken::new(cow_str, self.suffix, self.delimiter);
+                let inner_token = InnerToken::try_new(cow_str, self.suffix, self.delimiter);
                 match inner_token {
                     Err(msg) => Some(Err(msg)),
                     Ok(res) => Some(Ok(Token::new(self.scheme, res))),
@@ -827,12 +933,12 @@ impl<'a> Tokens<'a> {
         suffix: bool,
         delimiter: char,
         sent_id: Option<usize>,
-    ) -> Result<Self, ParsingPrefixError<String>> {
-        let outside_token_inner = InnerToken::new(Cow::Borrowed("O"), suffix, delimiter)?;
+    ) -> Result<Self, ParsingError<String>> {
+        let outside_token_inner = InnerToken::try_new(Cow::Borrowed("O"), suffix, delimiter)?;
         let outside_token = Token::new(scheme, outside_token_inner);
         let tokens_iter =
             ExtendedTokensIterator::new(outside_token, tokens, scheme, suffix, delimiter);
-        let extended_tokens: Result<Vec<Token>, ParsingPrefixError<String>> = tokens_iter.collect();
+        let extended_tokens: Result<Vec<Token>, ParsingError<String>> = tokens_iter.collect();
         match extended_tokens {
             Err(prefix_error) => Err(prefix_error),
             Ok(tokens) => Ok(Self {
@@ -942,7 +1048,7 @@ where
 {
     /// Takes out the current tokens and gets a reference to the
     /// previous tokens (in that order) when given an index. The index
-    /// must be >= 0 and < tokens.len() or this function will result
+    /// must be `>= 0` and `< tokens.len()` or this function will result
     /// in UB. Calling this function with an already used index will
     /// result in default tokens returned. This functions behaves
     /// differently, depending on the value of the index to accomodate
@@ -1018,7 +1124,7 @@ pub enum ConversionError<S: AsRef<str>> {
     /// Invalid token encoutered when
     InvalidToken(InvalidToken),
     /// Could not parse the string into a `Prefix`
-    ParsingPrefix(ParsingPrefixError<S>),
+    ParsingPrefix(ParsingError<S>),
 }
 
 // impl ConversionError<&str> {
@@ -1038,8 +1144,8 @@ impl<S: AsRef<str>> From<InvalidToken> for ConversionError<S> {
     }
 }
 
-impl<S: AsRef<str>> From<ParsingPrefixError<S>> for ConversionError<S> {
-    fn from(value: ParsingPrefixError<S>) -> Self {
+impl<S: AsRef<str>> From<ParsingError<S>> for ConversionError<S> {
+    fn from(value: ParsingError<S>) -> Self {
         Self::ParsingPrefix(value)
     }
 }
@@ -1118,7 +1224,7 @@ impl<'a, T: Into<&'a str>> TryFromVecStrict<'a, T> for Entities<'a> {
         delimiter: char,
         sent_id: Option<usize>,
     ) -> Result<Entities<'a>, Self::Error> {
-        let vec_of_tokens: Result<Vec<_>, ParsingPrefixError<String>> = vec_of_tokens_2d
+        let vec_of_tokens: Result<Vec<_>, ParsingError<String>> = vec_of_tokens_2d
             .into_iter()
             .map(|v| v.into_iter().map(|x| Cow::from(x.into())).collect())
             .map(|v| Tokens::new(v, scheme, suffix, delimiter, sent_id))
@@ -1163,6 +1269,10 @@ impl<'a> Entities<'a> {
 
 #[cfg(test)]
 mod test {
+
+    use quickcheck::{self, TestResult};
+    #[macro_use(quickcheck)]
+    use quickcheck_macros::quickcheck as quickcheck_test;
     use super::*;
 
     impl<'a> Entity<'a> {
@@ -1170,6 +1280,104 @@ mod test {
             (self.sent_id, self.start, self.end, self.tag.borrow())
         }
     }
+
+    impl quickcheck::Arbitrary for Prefix {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            let mut choice_slice: Vec<Prefix> = all::<Prefix>().collect();
+            // Removes the `ALL` prefix
+            choice_slice.swap_remove(choice_slice.len() - 1);
+            g.choose(choice_slice.as_ref()).unwrap().clone()
+        }
+    }
+
+    impl quickcheck::Arbitrary for UserPrefix {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            let mut choice_slice: Vec<UserPrefix> = all::<UserPrefix>().collect();
+            // Removes the `ALL` prefix
+            choice_slice.swap_remove(choice_slice.len() - 1);
+            g.choose(choice_slice.as_ref()).unwrap().clone()
+        }
+    }
+
+    #[quickcheck_test]
+    fn propertie_test_new_token_len(
+        chars: Vec<char>,
+        prefix: UserPrefix,
+        suffix: bool,
+        delimiter: char,
+    ) -> TestResult {
+        let tag: String = chars.into_iter().collect();
+        if tag.len() == 0 {
+            return TestResult::discard();
+        };
+        let tag_len = tag.len();
+        dbg!(tag_len);
+        let token_string = if suffix {
+            tag + &String::from(delimiter) + &prefix.to_string()
+        } else {
+            prefix.to_string() + &String::from(delimiter) + &tag
+        };
+        let token = Cow::from(token_string);
+        dbg!(token.clone());
+        let inner_token_res = InnerToken::try_new(token, suffix, delimiter);
+        match inner_token_res {
+            Err(err) => match err {
+                ParsingError::PrefixError(s) => panic!("{}", ParsingError::PrefixError(s)),
+                ParsingError::EmptyToken => TestResult::discard(),
+            },
+            Ok(inner_token) => {
+                if inner_token.tag.len() == tag_len {
+                    TestResult::passed()
+                } else {
+                    TestResult::failed()
+                }
+            }
+        }
+    }
+
+    #[quickcheck_test]
+    fn propertie_test_new_token_prefix(
+        chars: Vec<char>,
+        prefix: UserPrefix,
+        suffix: bool,
+        delimiter: char,
+    ) -> TestResult {
+        let tag: String = chars.into_iter().collect();
+        if tag.len() == 0 {
+            return TestResult::discard();
+        };
+        let token_string = if suffix {
+            tag + &String::from(delimiter) + &prefix.to_string()
+        } else {
+            prefix.to_string() + &String::from(delimiter) + &tag
+        };
+        let token = Cow::from(token_string);
+        dbg!(token.clone());
+        let inner_token_res = InnerToken::try_new(token, suffix, delimiter);
+        match inner_token_res {
+            Err(err) => match err {
+                ParsingError::PrefixError(s) => panic!("{}", ParsingError::PrefixError(s)),
+                ParsingError::EmptyToken => TestResult::discard(),
+            },
+            Ok(inner_token) => {
+                if inner_token.prefix == prefix {
+                    TestResult::passed()
+                } else {
+                    TestResult::failed()
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_empty_token_return_err() {
+        let token = Cow::from("");
+        let suffix = true;
+        let delimiter = '-';
+        let res = InnerToken::try_new(token, suffix, delimiter).is_err();
+        assert!(res);
+    }
+
     #[test]
     fn test_entities_try_from() {
         let vec_of_tokens = vec![
@@ -1365,15 +1573,15 @@ mod test {
     #[test]
     fn test_innertoken_new_with_suffix() {
         let tokens = vec![
-            (Cow::from("PER-I"), Cow::from("PER"), Prefix::I),
-            (Cow::from("PER-B"), Cow::from("PER"), Prefix::B),
-            (Cow::from("LOC-I"), Cow::from("LOC"), Prefix::I),
-            (Cow::from("O"), Cow::from("_"), Prefix::O),
+            (Cow::from("PER-I"), Cow::from("PER"), UserPrefix::I),
+            (Cow::from("PER-B"), Cow::from("PER"), UserPrefix::B),
+            (Cow::from("LOC-I"), Cow::from("LOC"), UserPrefix::I),
+            (Cow::from("O"), Cow::from("_"), UserPrefix::O),
         ];
         let suffix = true;
         let delimiter = '-';
         for (i, (token, tag, prefix)) in tokens.into_iter().enumerate() {
-            let inner_token = InnerToken::new(token.clone(), suffix, delimiter).unwrap();
+            let inner_token = InnerToken::try_new(token.clone(), suffix, delimiter).unwrap();
             let expected_inner_token = InnerToken { token, prefix, tag };
             dbg!(i);
             assert_eq!(inner_token, expected_inner_token)
@@ -1382,15 +1590,15 @@ mod test {
     #[test]
     fn test_innertoken_new() {
         let tokens = vec![
-            (Cow::from("I-PER"), Cow::from("PER"), Prefix::I),
-            (Cow::from("B-PER"), Cow::from("PER"), Prefix::B),
-            (Cow::from("I-LOC"), Cow::from("LOC"), Prefix::I),
-            (Cow::from("O"), Cow::from("_"), Prefix::O),
+            (Cow::from("I-PER"), Cow::from("PER"), UserPrefix::I),
+            (Cow::from("B-PER"), Cow::from("PER"), UserPrefix::B),
+            (Cow::from("I-LOC"), Cow::from("LOC"), UserPrefix::I),
+            (Cow::from("O"), Cow::from("_"), UserPrefix::O),
         ];
         let suffix = false;
         let delimiter = '-';
         for (i, (token, tag, prefix)) in tokens.into_iter().enumerate() {
-            let inner_token = InnerToken::new(token.clone(), suffix, delimiter).unwrap();
+            let inner_token = InnerToken::try_new(token.clone(), suffix, delimiter).unwrap();
             let expected_inner_token = InnerToken { token, prefix, tag };
             dbg!(i);
             assert_eq!(inner_token, expected_inner_token)
@@ -1438,7 +1646,7 @@ mod test {
         let tokens = build_str_vec();
         let iter = LenientChunkIter::new(tokens.as_ref(), false, '-');
         let actual = iter.collect::<Vec<_>>();
-        let expected: Vec<Result<Entity, ParsingPrefixError<String>>> = vec![
+        let expected: Vec<Result<Entity, ParsingError<String>>> = vec![
             Ok(Entity::new(None, 0, 1, Cow::Borrowed("PER"))),
             Ok(Entity::new(None, 3, 3, Cow::Borrowed("LOC"))),
         ];
@@ -1480,6 +1688,18 @@ mod test {
             vec![(None, 3, 5, "MISC"), (None, 7, 8, "PER")];
         assert_eq!(expected, actual)
     }
+
+    #[test]
+    /// This function tests an implicit invariant used when building `Tokens` and `UnicodeIndex`:
+    /// The prefix must be composed of a single unicode character.
+    fn test_prefix_unicode_length() {
+        let all_prefixes: Vec<_> = all::<UserPrefix>().collect();
+        for p in all_prefixes {
+            let len = p.to_string().graphemes(true).count();
+            assert_eq!(1, len);
+        }
+    }
+
     fn build_tokens() -> Tokens<'static> {
         let tokens = build_tokens_vec();
         let scheme = SchemeType::IOB2;

@@ -4,7 +4,7 @@ sequence and a predicted sequence.
 */
 use crate::reporter::{Average, ClassMetricsInner, OverallAverage, Reporter};
 use crate::schemes::{
-    get_entities_lenient, ConversionError, Entities, InvalidToken, ParsingPrefixError, SchemeType,
+    get_entities_lenient, ConversionError, Entities, InvalidToken, ParsingError, SchemeType,
     TryFromVecStrict,
 };
 use ahash::{HashMap as AHashMap, HashSet as AHashSet};
@@ -392,8 +392,8 @@ impl<S: AsRef<str> + std::fmt::Debug> Display for ComputationError<S> {
 }
 impl<S: AsRef<str> + std::fmt::Debug> Error for ComputationError<S> {}
 
-impl<S: AsRef<str> + std::fmt::Debug> From<ParsingPrefixError<S>> for ComputationError<S> {
-    fn from(value: ParsingPrefixError<S>) -> Self {
+impl<S: AsRef<str> + std::fmt::Debug> From<ParsingError<S>> for ComputationError<S> {
+    fn from(value: ParsingError<S>) -> Self {
         let tmp_value = ConversionError::from(value);
         Self::ConversionError(tmp_value)
     }
