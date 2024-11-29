@@ -5,7 +5,7 @@ niche, but hopefully in a much more performant way.
 # SCHEMES
 The current schemes are supported:
 * IOB1: Here, `I` is a token inside a chunk, `O` is a token outside a chunk and `B` is the
-beginning of chunk immediately following another chunk of the same named entity.
+beginning of the chunk immediately following another chunk of the same named entity.
 * IOB2: It is same as IOB1, except that a `B` tag is given for every token, which exists at the
 beginning of the chunk.
 * IOE1: An `E` tag used to mark the last token of a chunk immediately preceding another chunk of
@@ -39,6 +39,6 @@ mod reporter;
 // The public api starts here
 pub use entity::SchemeType;
 
-pub use metrics::{classification_report, ComputationError, DivByZeroStrat};
+pub use metrics::{classification_report, ComputationError, DivByZeroStrat, precision_recall_fscore_support};
 
 pub use reporter::{ClassMetrics, Reporter};

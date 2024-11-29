@@ -596,7 +596,7 @@ impl<'a> Entities<'a> {
 }
 
 #[cfg(test)]
-mod test {
+pub(super) mod tests {
 
     use super::*;
     use enum_iterator::{all, Sequence};
@@ -660,7 +660,7 @@ mod test {
     }
 
     #[derive(Debug, PartialEq, Hash, Clone, Sequence, Eq)]
-    enum TokensToTest {
+    pub(crate) enum TokensToTest {
         BPER,
         BGEO,
         BLOC,

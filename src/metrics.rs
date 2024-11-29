@@ -447,7 +447,7 @@ type PrecisionRecallFScoreTrueSum = (
 /// * `entities_true`: Optional entities used to reduce the computation load.
 /// * `entities_pred`: Optional entities used to reduce the computation load.
 /// * `strict`: Are we using the strict mode.
-fn precision_recall_fscore_support<'a, F: FloatExt>(
+pub fn precision_recall_fscore_support<'a, F: FloatExt>(
     y_true: Vec<Vec<&'a str>>,
     y_pred: Vec<Vec<&'a str>>,
     beta: F,
@@ -747,6 +747,10 @@ pub fn classification_report<'a>(
 
 #[cfg(test)]
 mod tests {
+
+    use crate::entity::tests::TokensToTest;
+    use quickcheck::{QuickCheck, TestResult};
+
     pub trait CloseEnough {
         fn are_close(&self, other: &Self, eps: f32) -> bool;
     }
@@ -1256,5 +1260,23 @@ PER, 1, 1, 1, 1\n";
             array![1, 1],
         );
         assert_eq!(actual, expected)
+    }
+
+
+
+    #[test]
+    fn test_propertie_dimension_of_averages() {
+        fn dimension_of_averages(
+            y_true: Vec<Vec<TokensToTest>>,
+            y_pred: Vec<Vec<TokensToTest>>,
+            beta: f32,
+            average: OverallAverage,
+            suffix: bool,
+            parallel: bool,
+            strict: bool,
+        ) -> TestResult {
+
+            let (p, r, f, ts) = precision_recall_fscore_support(y_true,y_pred, beta,  average, None, DivByZeroStrat::ReplaceBy0, SchemeType::IOB2, suffix, '-', parallel, None, None, strict).unwrap();
+        }
     }
 }
