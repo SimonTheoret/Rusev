@@ -32,12 +32,12 @@ the letters of the scheme, such as I-O-B or I-O-E. Prefix can only be a single a
 //TODO: Add information about the different options, such as `strict`, `parallel`, `zero_division`,
 //`suffix`, `sample_weight`.
 
+mod entity;
 mod metrics;
 mod reporter;
-mod schemes;
 
 // The public api starts here
-pub use schemes::SchemeType;
+pub use entity::SchemeType;
 
 pub use metrics::{classification_report, ComputationError, DivByZeroStrat};
 

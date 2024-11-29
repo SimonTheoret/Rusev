@@ -1,12 +1,12 @@
+use crate::entity::{
+    get_entities_lenient, ConversionError, Entities, InvalidToken, ParsingError, SchemeType,
+    TryFromVecStrict,
+};
 /**
 This module computes the metrics (precision, recall, f-score, support) of a ground-truth
 sequence and a predicted sequence.
 */
 use crate::reporter::{Average, ClassMetricsInner, OverallAverage, Reporter};
-use crate::schemes::{
-    get_entities_lenient, ConversionError, Entities, InvalidToken, ParsingError, SchemeType,
-    TryFromVecStrict,
-};
 use ahash::{HashMap as AHashMap, HashSet as AHashSet};
 use core::fmt;
 use itertools::multizip;
@@ -63,17 +63,6 @@ impl<F: Clone, T: Data<Elem = F>> ItemArrayExt<F> for ArrayBase<T, Dim<[usize; 1
             1 => Ok(self.get_first()),
             n => Err(ArrayNotUniqueOrEmpty(n)),
         }
-    }
-}
-#[derive(Debug, PartialEq, Hash, Clone, Copy)]
-enum Metric {
-    FScore,
-    Precision,
-    Recall,
-}
-impl Display for Metric {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
     }
 }
 
@@ -222,11 +211,11 @@ fn extract_tp_actual_correct_strict<'a>(
 ) -> Result<ActualTPCorrect<usize>, ComputationError<String>> {
     let entities_true_res = match entities_true {
         Some(e) => e,
-        None => &Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter, None)?,
+        None => &Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter)?,
     };
     let entities_pred_res = match entities_pred {
         Some(e) => e,
-        None => &Entities::try_from_vecs_strict(y_pred, scheme, suffix, delimiter, None)?,
+        None => &Entities::try_from_vecs_strict(y_pred, scheme, suffix, delimiter)?,
     };
     let entities_pred_unique_tags = entities_pred_res.unique_tags();
     let entities_true_unique_tags = entities_true_res.unique_tags();
@@ -681,12 +670,12 @@ pub fn classification_report<'a>(
     check_consistent_length(y_true.as_ref(), y_pred.as_ref())?;
     let sample_weight_array = sample_weight.map(|x| ArcArray::from_vec(x));
     let entities_true = if strict {
-        Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter, None)?
+        Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter)?
     } else {
         get_entities_lenient(y_true.as_ref(), suffix, delimiter)?
     };
     let entities_pred = if strict {
-        Entities::try_from_vecs_strict(y_pred, scheme, suffix, delimiter, None)?
+        Entities::try_from_vecs_strict(y_pred, scheme, suffix, delimiter)?
     } else {
         get_entities_lenient(y_pred.as_ref(), suffix, delimiter)?
     };
