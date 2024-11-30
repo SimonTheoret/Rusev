@@ -18,7 +18,7 @@ authors = ["Simon Théorêt <simonteoret@hotmail.com"]
 description = "Fast implementation of SeqEval, a sequence evaluation framework"
 license-file = "UNLICENCE"
 repository = "https://github.com/SimonTheoret/rusev"
-keywords = ["Machine Learning", "SeqEval", "Sequence Evaluation", "NLP", "Evaluation"]
+keywords = ["Machine Learning", "SeqEval", "Sequence Evaluation", "NLP", "Evaluation", "NER"]
 categories = ["science", "text-processing", "mathematics"]
 
 [lib]

@@ -228,7 +228,7 @@ fn extract_tp_actual_correct_strict<'a>(
         target_names
             .clone()
             .into_iter()
-            .map(|t| entities_pred_res.filter(*t).len()),
+            .map(|t| entities_pred_res.filter_count(*t)),
     );
     let tp_sum: Array1<usize> = Array::from_iter(target_names.clone().into_iter().map(|t| {
         entities_true_res
@@ -238,7 +238,7 @@ fn extract_tp_actual_correct_strict<'a>(
     }));
     let test = target_names
         .into_iter()
-        .map(|t| entities_true_res.filter(*t).len());
+        .map(|t| entities_true_res.filter_count(*t));
     let true_sum: Array1<usize> = Array::from_iter(test);
 
     Ok((pred_sum, tp_sum, true_sum))
@@ -1262,8 +1262,6 @@ PER, 1, 1, 1, 1\n";
         assert_eq!(actual, expected)
     }
 
-
-
     #[test]
     fn test_propertie_dimension_of_averages() {
         fn dimension_of_averages(
@@ -1275,8 +1273,39 @@ PER, 1, 1, 1, 1\n";
             parallel: bool,
             strict: bool,
         ) -> TestResult {
-
-            let (p, r, f, ts) = precision_recall_fscore_support(y_true,y_pred, beta,  average, None, DivByZeroStrat::ReplaceBy0, SchemeType::IOB2, suffix, '-', parallel, None, None, strict).unwrap();
+            let y_true_str: Vec<Vec<_>> = y_true
+                .into_iter()
+                .map(|v| {
+                    v.into_iter()
+                        .map(|x: TokensToTest| -> &str { x.into() })
+                        .collect()
+                })
+                .collect();
+            let y_pred_str: Vec<Vec<_>> = y_pred
+                .into_iter()
+                .map(|v| {
+                    v.into_iter()
+                        .map(|x: TokensToTest| -> &str { x.into() })
+                        .collect()
+                })
+                .collect();
+            let (p, r, f, ts) = precision_recall_fscore_support(
+                y_true_str,
+                y_pred_str,
+                beta,
+                average.into(),
+                None,
+                DivByZeroStrat::ReplaceBy0,
+                SchemeType::IOB2,
+                suffix,
+                '-',
+                parallel,
+                None,
+                None,
+                strict,
+            )
+            .unwrap();
+            TestResult::passed()
         }
     }
 }

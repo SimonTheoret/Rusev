@@ -590,6 +590,19 @@ impl<'a> Entities<'a> {
         )
     }
 
+    /// Filters the entities for a given tag name and return the number of entities..
+    ///
+    /// * `tag_name`: This variable is used to compare the tag of the
+    ///   entity with. Only those whose tag is equal to a reference to
+    ///   `tag_name` are added into the returned HashSet.
+    pub fn filter_count<S: AsRef<str>>(&self, tag_name: S) -> usize {
+        let tag_name_ref = tag_name.as_ref();
+        self.iter()
+            .flat_map(|v| v.iter())
+            .filter(|e| e.tag == tag_name_ref)
+            .count()
+    }
+
     pub fn unique_tags(&self) -> AHashSet<&str> {
         AHashSet::from_iter(self.iter().flat_map(|v| v.iter()).map(|e| e.tag.borrow()))
     }
