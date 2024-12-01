@@ -176,6 +176,32 @@ impl Display for InconsistentLengthError {
 }
 impl Error for InconsistentLengthError {}
 
+fn check_vecs_empty<T>(
+    y_true: &[Vec<T>],
+    y_pred: &[Vec<T>],
+) -> Result<(), ComputationError<String>> {
+    let mut y_true_is_empty = true;
+    for v in y_true {
+        if !v.is_empty() {
+            y_true_is_empty = false;
+        }
+    }
+    if y_true_is_empty {
+        return Err(ComputationError::EmptyInput(String::from("y_true")));
+    };
+
+    let mut y_pred_is_empty = true;
+    for v in y_pred {
+        if !v.is_empty() {
+            y_pred_is_empty = false;
+        }
+    }
+    if y_pred_is_empty {
+        return Err(ComputationError::EmptyInput(String::from("y_pred")));
+    };
+    return Ok(());
+}
+
 fn check_consistent_length<T>(
     y_true: &[Vec<T>],
     y_pred: &[Vec<T>],
@@ -184,7 +210,6 @@ fn check_consistent_length<T>(
     let y_pred_lengths: Vec<_> = y_pred.iter().map(|v| v.len()).collect();
     let y_true_len = y_true_lengths.len();
     let y_pred_len = y_pred_lengths.len();
-
     if y_true_len != y_pred_len {
         return Err(InconsistentLengthError(y_true_len, y_pred_len));
     }
@@ -316,14 +341,9 @@ fn extract_tp_actual_correct_lenient<'a>(
             Some(set) => set,
             None => &AHashSet::default(),
         };
-        dbg!(tmp_true_init_set.clone());
-        dbg!(tmp_pred_init_set.clone());
         let tp_sum_len = tmp_pred_init_set.intersection(tmp_true_init_set);
-        dbg!(tp_sum_len.clone().collect::<Vec<_>>());
         tp_sum.push(tp_sum_len.count());
     }
-    dbg!(true_sum.clone());
-    dbg!(pred_sum.clone());
     return Ok((
         Array::from(true_sum),
         Array::from(tp_sum),
@@ -364,6 +384,7 @@ pub enum ComputationError<S: AsRef<str> + std::fmt::Debug> {
     InputError(MultiInputError),
     EmptyArray(String),
     EmptyOrNotUnique(ArrayNotUniqueOrEmpty),
+    EmptyInput(String),
 }
 impl<S: AsRef<str> + std::fmt::Debug> Display for ComputationError<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -376,6 +397,7 @@ impl<S: AsRef<str> + std::fmt::Debug> Display for ComputationError<S> {
             Self::InputError(input_err) => std::fmt::Display::fmt(&input_err, f),
             Self::EmptyArray(empty_err) => write!(f, "Found an empty array in {}", empty_err),
             Self::EmptyOrNotUnique(size_err) => std::fmt::Display::fmt(size_err, f),
+            Self::EmptyInput(which) => write!(f, "Received an empty input {}", which),
         }
     }
 }
@@ -430,8 +452,10 @@ type PrecisionRecallFScoreTrueSum = (
     Array<usize, Dim<[usize; 1]>>,
 );
 
+//TODO: Check lengths
 /// One of the main entrypoints of the Rusev library. This function computes the precision, recall,
-/// fscore and support of the true and predicted tokens.
+/// fscore and support of the true and predicted tokens. This method does NOT check the lengths of
+/// `y_true` and `y_pred`.
 ///
 /// * `y_true`: True tokens
 /// * `y_pred`: Predicted tokens
@@ -462,6 +486,13 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
     entities_pred: Option<&Entities<'a>>,
     strict: bool,
 ) -> Result<PrecisionRecallFScoreTrueSum, ComputationError<String>> {
+    if y_true.is_empty() {
+        return Err(ComputationError::EmptyInput(String::from("y_true")));
+    }
+    if y_pred.is_empty() {
+        return Err(ComputationError::EmptyInput(String::from("y_pred")));
+    }
+    check_vecs_empty(&y_true, &y_pred)?;
     if beta.is_sign_negative() {
         return Err(ComputationError::BetaNotPositive);
     };
@@ -486,7 +517,6 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
             entities_pred,
         )?
     };
-    dbg!(&pred_sum, &tp_sum, &true_sum);
     let beta2 = beta.powi(2);
     if matches!(average, Average::Micro) {
         tp_sum = array![tp_sum.sum()];
@@ -567,15 +597,15 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
             Ok((final_precision, final_recall, final_f_score, true_sum))
         }
         _ => {
-            let final_precision = Array::from_vec(vec![precision.mean().ok_or_else(|| {
-                ComputationError::EmptyArray(String::from("precision array was empty"))
-            })?]);
-            let final_recall = Array::from_vec(vec![recall.mean().ok_or_else(|| {
-                ComputationError::EmptyArray(String::from("precision array was empty"))
-            })?]);
-            let final_f_score = Array::from_vec(vec![f_score.mean().ok_or_else(|| {
-                ComputationError::EmptyArray(String::from("precision array was empty"))
-            })?]);
+            let final_precision = Array::from_vec(vec![precision
+                .mean()
+                .ok_or_else(|| ComputationError::EmptyArray(String::from("precision")))?]);
+            let final_recall = Array::from_vec(vec![recall
+                .mean()
+                .ok_or_else(|| ComputationError::EmptyArray(String::from("precision")))?]);
+            let final_f_score = Array::from_vec(vec![f_score
+                .mean()
+                .ok_or_else(|| ComputationError::EmptyArray(String::from("precision")))?]);
             let final_true_sum = array![true_sum.sum()];
             Ok((final_precision, final_recall, final_f_score, final_true_sum))
         }
@@ -848,7 +878,6 @@ mod tests {
                     ),
                 ]),
             };
-            dbg!(&actual, &expected);
             assert!(actual.are_close(&expected, 1e-6));
         }
     }
@@ -875,7 +904,6 @@ mod tests {
             ),
         ];
         for (y_true, y_pred, expected) in test_cases.into_iter() {
-            dbg!(y_true.clone(), y_pred.clone());
             assert_eq!(check_consistent_length(&y_true, &y_pred), expected)
         }
     }
@@ -944,7 +972,6 @@ mod tests {
             true,
         );
         let reporter_unwrapped = reporter.unwrap();
-        dbg!("{}", reporter_unwrapped.clone());
         // NOTE: Do not change the indentation
         let expected = "Class, Precision, Recall, Fscore, Support
 Overall_Weighted, 0.5, 0.5, 0.5, 2
@@ -1262,17 +1289,30 @@ PER, 1, 1, 1, 1\n";
         assert_eq!(actual, expected)
     }
 
+    impl quickcheck::Arbitrary for OverallAverage {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            let values: [OverallAverage; 3] = [
+                OverallAverage::Micro,
+                OverallAverage::Macro,
+                OverallAverage::Weighted,
+            ];
+            *g.choose(&values).unwrap()
+        }
+    }
+
     #[test]
-    fn test_propertie_dimension_of_averages() {
-        fn dimension_of_averages(
+    fn test_err_on_negative_beta() {
+        fn err_on_beta(
             y_true: Vec<Vec<TokensToTest>>,
             y_pred: Vec<Vec<TokensToTest>>,
             beta: f32,
             average: OverallAverage,
-            suffix: bool,
             parallel: bool,
             strict: bool,
         ) -> TestResult {
+            if y_true.is_empty() || y_pred.is_empty() {
+                return TestResult::discard();
+            }
             let y_true_str: Vec<Vec<_>> = y_true
                 .into_iter()
                 .map(|v| {
@@ -1289,23 +1329,155 @@ PER, 1, 1, 1, 1\n";
                         .collect()
                 })
                 .collect();
-            let (p, r, f, ts) = precision_recall_fscore_support(
+            let beta_pos = beta.abs();
+            let res = precision_recall_fscore_support(
                 y_true_str,
                 y_pred_str,
-                beta,
+                beta_pos,
                 average.into(),
                 None,
                 DivByZeroStrat::ReplaceBy0,
                 SchemeType::IOB2,
-                suffix,
+                false,
                 '-',
                 parallel,
                 None,
                 None,
                 strict,
-            )
-            .unwrap();
-            TestResult::passed()
+            );
+
+            if beta < 0.0 {
+                if res
+                    .clone()
+                    .is_err_and(|err| err == ComputationError::BetaNotPositive)
+                {
+                    TestResult::passed()
+                } else {
+                    if res.is_err() {
+                        match res {
+                            Err(err) => {
+                                dbg!(err);
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                    TestResult::failed()
+                }
+            } else {
+                TestResult::discard()
+            }
         }
+        let mut qc = QuickCheck::new().tests(2000);
+        qc.quickcheck(
+            err_on_beta
+                as fn(
+                    y_true: Vec<Vec<TokensToTest>>,
+                    y_pred: Vec<Vec<TokensToTest>>,
+                    beta: f32,
+                    average: OverallAverage,
+                    parallel: bool,
+                    strict: bool,
+                ) -> TestResult,
+        )
+    }
+
+    #[test]
+    fn test_propertie_dimension_of_averages() {
+        fn dimension_of_averages(
+            y_true: Vec<Vec<TokensToTest>>,
+            y_pred: Vec<Vec<TokensToTest>>,
+            beta: f32,
+            average: OverallAverage,
+            parallel: bool,
+            strict: bool,
+        ) -> TestResult {
+            if y_true.is_empty() || y_pred.is_empty() {
+                return TestResult::discard();
+            }
+            let y_true_str: Vec<Vec<_>> = y_true
+                .into_iter()
+                .map(|v| {
+                    v.into_iter()
+                        .map(|x: TokensToTest| -> &str { x.into() })
+                        .collect()
+                })
+                .collect();
+            let y_pred_str: Vec<Vec<_>> = y_pred
+                .into_iter()
+                .map(|v| {
+                    v.into_iter()
+                        .map(|x: TokensToTest| -> &str { x.into() })
+                        .collect()
+                })
+                .collect();
+            if y_true_str.len() == 1 {
+                if y_true_str[0].is_empty() {
+                    return TestResult::discard();
+                }
+            }
+            if y_pred_str.len() == 1 {
+                if y_pred_str[0].is_empty() {
+                    return TestResult::discard();
+                }
+            }
+            let beta_pos = beta.abs();
+            let res = precision_recall_fscore_support(
+                y_true_str,
+                y_pred_str,
+                beta_pos,
+                average.into(),
+                None,
+                DivByZeroStrat::ReplaceBy0,
+                SchemeType::IOB2,
+                false,
+                '-',
+                parallel,
+                None,
+                None,
+                strict,
+            );
+            let (p, r, f, ts) = match res {
+                Ok((pi, ri, fi, tsi)) => (pi, ri, fi, tsi),
+                Err(_) => return TestResult::discard(),
+            };
+            if p.dim() == r.dim() && r.dim() == f.dim() && f.dim() == ts.dim() {
+                TestResult::passed()
+            } else {
+                TestResult::failed()
+            }
+        }
+        let mut qc = QuickCheck::new().tests(2000);
+        qc.quickcheck(
+            dimension_of_averages
+                as fn(
+                    y_true: Vec<Vec<TokensToTest>>,
+                    y_pred: Vec<Vec<TokensToTest>>,
+                    beta: f32,
+                    average: OverallAverage,
+                    parallel: bool,
+                    strict: bool,
+                ) -> TestResult,
+        )
+    }
+    #[test]
+    fn test_empty_input() {
+        let res = precision_recall_fscore_support(
+            vec![vec![]],
+            vec![vec![]],
+            1.0,
+            OverallAverage::Macro.into(),
+            None,
+            DivByZeroStrat::ReplaceBy0,
+            SchemeType::IOB2,
+            false,
+            '-',
+            false,
+            None,
+            None,
+            false,
+        );
+        assert!(
+            res.is_err_and(|err| err == ComputationError::EmptyArray(String::from("precision")))
+        );
     }
 }

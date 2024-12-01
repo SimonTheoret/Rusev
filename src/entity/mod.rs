@@ -60,6 +60,7 @@ struct InnerLenientChunkIter<'a> {
     content: Iter<'a, &'a str>,
     is_at_end: bool,
 }
+
 impl<'a> InnerLenientChunkIter<'a> {
     fn new(seq: &'a [&'a str]) -> Self {
         InnerLenientChunkIter {
@@ -68,6 +69,7 @@ impl<'a> InnerLenientChunkIter<'a> {
         }
     }
 }
+
 impl<'a> Iterator for InnerLenientChunkIter<'a> {
     type Item = &'a str;
     fn next(&mut self) -> Option<Self::Item> {
