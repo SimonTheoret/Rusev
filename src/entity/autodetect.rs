@@ -1,7 +1,9 @@
-use crate::entity::{get_entities_lenient, schemes::SchemeType, Entities, TryFromVecStrict};
+use crate::entity::{
+    get_entities_lenient, schemes::SchemeType, Entities, InnerToken, TryFromVecStrict, UserPrefix,
+};
 use ahash::AHashSet;
 use enum_iterator::all;
-use std::{error::Error, fmt::Display};
+use std::{borrow::Cow, error::Error, fmt::Display};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AutoDetectError {
@@ -87,6 +89,30 @@ impl SchemeType {
         all::<SchemeType>().collect()
     }
 }
+
+fn auto_detect(sequences: &[Vec<&str>], suffix: bool, delimiter: char) -> SchemeType {
+    let mut prefixes: AHashSet<UserPrefix> = AHashSet::default();
+    for tokens in sequences {
+        for token in tokens {
+            let tok = InnerToken::try_new(Cow::from(*token), suffix, delimiter);
+            match tok {
+                Ok(p) => prefixes.insert(p.prefix),
+                Err(e) => continue,
+            };
+        }
+    }
+    if prefixes.
+}
+//     if prefixes in allowed_iob2_prefixes:
+//         return IOB2
+//     elif prefixes in allowed_ioe2_prefixes:
+//         return IOE2
+//     elif prefixes in allowed_iobes_prefixes:
+//         return IOBES
+//     elif prefixes in allowed_bilou_prefixes:
+//         return BILOU
+//     else:
+//         raise ValueError(error_message.format(prefixes))
 
 #[cfg(test)]
 mod test {
