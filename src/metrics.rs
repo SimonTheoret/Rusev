@@ -184,6 +184,7 @@ fn check_vecs_empty<T>(
     for v in y_true {
         if !v.is_empty() {
             y_true_is_empty = false;
+            break;
         }
     }
     if y_true_is_empty {
@@ -231,16 +232,14 @@ fn extract_tp_actual_correct_strict<'a>(
     scheme: SchemeType,
     suffix: bool,
     delimiter: char,
-    entities_true: Option<&Entities<'a>>,
-    entities_pred: Option<&Entities<'a>>,
+    entities_true_and_pred: Option<(&Entities<'a>, &Entities<'a>)>,
 ) -> Result<ActualTPCorrect<usize>, ComputationError<String>> {
-    let entities_true_res = match entities_true {
-        Some(e) => e,
-        None => &Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter)?,
-    };
-    let entities_pred_res = match entities_pred {
-        Some(e) => e,
-        None => &Entities::try_from_vecs_strict(y_pred, scheme, suffix, delimiter)?,
+    let (entities_true_res, entities_pred_res) = match entities_true_and_pred {
+        Some((e1, e2)) => (e1, e2),
+        None => (
+            &Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter)?,
+            &Entities::try_from_vecs_strict(y_pred, scheme, suffix, delimiter)?,
+        ),
     };
     let entities_pred_unique_tags = entities_pred_res.unique_tags();
     let entities_true_unique_tags = entities_true_res.unique_tags();
@@ -275,12 +274,14 @@ fn extract_tp_actual_correct_lenient<'a>(
     _scheme: SchemeType,
     suffix: bool,
     delimiter: char,
-    entities_true: Option<&Entities<'a>>,
-    entities_pred: Option<&Entities<'a>>,
+    entities_true_and_pred: Option<(&Entities<'a>, &Entities<'a>)>,
 ) -> Result<ActualTPCorrect<usize>, ComputationError<String>> {
-    let entities_true_tmp = match entities_true {
-        Some(v) => v,
-        None => &get_entities_lenient(y_true.as_ref(), suffix, delimiter)?,
+    let (entities_true_tmp, entities_pred_tmp) = match entities_true_and_pred {
+        Some((e1, e2)) => (e1, e2),
+        None => (
+            &get_entities_lenient(y_true.as_ref(), suffix, delimiter)?,
+            &get_entities_lenient(y_pred.as_ref(), suffix, delimiter)?,
+        ),
     };
     let mut entities_true_init: AHashMap<&str, AHashSet<(usize, usize)>> = AHashMap::default();
     for e in entities_true_tmp.iter().flatten() {
@@ -296,10 +297,10 @@ fn extract_tp_actual_correct_lenient<'a>(
             }
         }
     }
-    let entities_pred_tmp = match entities_pred {
-        Some(v) => v,
-        None => &get_entities_lenient(y_pred.as_ref(), suffix, delimiter)?,
-    };
+    // let entities_pred_tmp = match entities_pred {
+    //     Some(v) => v,
+    //     None => &get_entities_lenient(y_pred.as_ref(), suffix, delimiter)?,
+    // };
     let mut entities_pred_init: AHashMap<&str, AHashSet<(usize, usize)>> = AHashMap::default();
     for e in entities_pred_tmp.iter().flatten() {
         let (start, end) = (e.start.clone(), e.end.clone());
@@ -482,17 +483,12 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
     suffix: bool,
     delimiter: char,
     parallel: bool,
-    entities_true: Option<&Entities<'a>>,
-    entities_pred: Option<&Entities<'a>>,
+    entities_true_and_pred: Option<(&Entities<'a>, &Entities<'a>)>,
     strict: bool,
 ) -> Result<PrecisionRecallFScoreTrueSum, ComputationError<String>> {
-    if y_true.is_empty() {
-        return Err(ComputationError::EmptyInput(String::from("y_true")));
+    if entities_true_and_pred.is_none() {
+        check_vecs_empty(&y_true, &y_pred)?;
     }
-    if y_pred.is_empty() {
-        return Err(ComputationError::EmptyInput(String::from("y_pred")));
-    }
-    check_vecs_empty(&y_true, &y_pred)?;
     if beta.is_sign_negative() {
         return Err(ComputationError::BetaNotPositive);
     };
@@ -503,8 +499,7 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
             scheme,
             suffix,
             delimiter,
-            entities_true,
-            entities_pred,
+            entities_true_and_pred,
         )?
     } else {
         extract_tp_actual_correct_lenient(
@@ -513,8 +508,7 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
             scheme,
             suffix,
             delimiter,
-            entities_true,
-            entities_pred,
+            entities_true_and_pred,
         )?
     };
     let beta2 = beta.powi(2);
@@ -724,8 +718,7 @@ pub fn classification_report<'a>(
         suffix,
         delimiter,
         parallel,
-        Some(&entities_true),
-        Some(&entities_pred),
+        Some((&entities_true, &entities_pred)),
         strict,
     )?;
     let mut reporter = Reporter::default();
@@ -764,8 +757,7 @@ pub fn classification_report<'a>(
             suffix,
             delimiter,
             parallel,
-            Some(&entities_true),
-            Some(&entities_pred),
+            Some((&entities_true, &entities_pred)),
             strict,
         )?;
         let tmp_metrics =
@@ -1033,16 +1025,9 @@ PER, 1, 1, 1, 1\n";
             vec!["B-PER", "I-PER", "O"],
         ];
         // predicted sum, true positive sum and true sum
-        let (predicted_sum, true_positive_sum, true_sum) = extract_tp_actual_correct_strict(
-            y_true,
-            y_pred,
-            SchemeType::IOB2,
-            false,
-            '-',
-            None,
-            None,
-        )
-        .unwrap();
+        let (predicted_sum, true_positive_sum, true_sum) =
+            extract_tp_actual_correct_strict(y_true, y_pred, SchemeType::IOB2, false, '-', None)
+                .unwrap();
         dbg!(true_positive_sum.clone());
         let expected = (vec![1, 1], vec![0, 1], vec![1, 1]);
         assert_eq!(
@@ -1076,7 +1061,6 @@ PER, 1, 1, 1, 1\n";
             '-',
             true,
             None,
-            None,
             true,
         )
         .unwrap();
@@ -1100,7 +1084,6 @@ PER, 1, 1, 1, 1\n";
             false,
             '-',
             true,
-            None,
             None,
             true,
         )
@@ -1138,7 +1121,6 @@ PER, 1, 1, 1, 1\n";
                 '-',
                 true,
                 None,
-                None,
                 true,
             )
             .unwrap();
@@ -1167,7 +1149,6 @@ PER, 1, 1, 1, 1\n";
             false,
             '-',
             true,
-            None,
             None,
             false,
         )
@@ -1202,7 +1183,6 @@ PER, 1, 1, 1, 1\n";
             false,
             '-',
             true,
-            None,
             None,
             false,
         )
@@ -1239,7 +1219,6 @@ PER, 1, 1, 1, 1\n";
             '-',
             true,
             None,
-            None,
             false,
         )
         .unwrap();
@@ -1274,7 +1253,6 @@ PER, 1, 1, 1, 1\n";
             false,
             '-',
             true,
-            None,
             None,
             false,
         )
@@ -1329,7 +1307,7 @@ PER, 1, 1, 1, 1\n";
                         .collect()
                 })
                 .collect();
-            let beta_pos = beta.abs();
+            let beta_pos = -beta.abs();
             let res = precision_recall_fscore_support(
                 y_true_str,
                 y_pred_str,
@@ -1342,29 +1320,18 @@ PER, 1, 1, 1, 1\n";
                 '-',
                 parallel,
                 None,
-                None,
                 strict,
             );
-
-            if beta < 0.0 {
-                if res
-                    .clone()
-                    .is_err_and(|err| err == ComputationError::BetaNotPositive)
-                {
-                    TestResult::passed()
-                } else {
-                    if res.is_err() {
-                        match res {
-                            Err(err) => {
-                                dbg!(err);
-                            }
-                            _ => unreachable!(),
-                        }
+            match res {
+                Ok(_) => TestResult::failed(),
+                Err(e) => match e {
+                    ComputationError::BetaNotPositive => TestResult::passed(),
+                    ComputationError::EmptyInput(_) => TestResult::discard(),
+                    e => {
+                        dbg!(e);
+                        TestResult::failed()
                     }
-                    TestResult::failed()
-                }
-            } else {
-                TestResult::discard()
+                },
             }
         }
         let mut qc = QuickCheck::new().tests(2000);
@@ -1433,7 +1400,6 @@ PER, 1, 1, 1, 1\n";
                 '-',
                 parallel,
                 None,
-                None,
                 strict,
             );
             let (p, r, f, ts) = match res {
@@ -1473,11 +1439,8 @@ PER, 1, 1, 1, 1\n";
             '-',
             false,
             None,
-            None,
             false,
         );
-        assert!(
-            res.is_err_and(|err| err == ComputationError::EmptyArray(String::from("precision")))
-        );
+        assert!(res.is_err_and(|err| err == ComputationError::EmptyInput(String::from("y_true"))));
     }
 }
