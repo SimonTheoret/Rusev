@@ -68,6 +68,20 @@ impl From<UserPrefix> for Prefix {
     }
 }
 
+impl From<&UserPrefix> for Prefix {
+    fn from(value: &UserPrefix) -> Self {
+        match value {
+            UserPrefix::I => Self::I,
+            UserPrefix::O => Self::O,
+            UserPrefix::B => Self::B,
+            UserPrefix::E => Self::E,
+            UserPrefix::S => Self::S,
+            UserPrefix::U => Self::U,
+            UserPrefix::L => Self::L,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Hash, Clone, Sequence, Eq)]
 /// Prefix represent an annotation specifying the place of a token in a chunk. For example, in
 /// `IOB1`, the `I` prefix is used to indicate that the token is inside a NER. Prefix can only be a
@@ -332,7 +346,7 @@ impl<'a> Default for Token<'a> {
 }
 
 impl<'a> Token<'a> {
-    const IOB1_ALLOWED_PREFIXES: [Prefix; 3] = [Prefix::I, Prefix::O, Prefix::B];
+    pub(crate) const IOB1_ALLOWED_PREFIXES: [Prefix; 3] = [Prefix::I, Prefix::O, Prefix::B];
     const IOB1_START_PATTERNS: [(Prefix, Prefix, Tag); 5] = [
         (Prefix::O, Prefix::I, Tag::Any),
         (Prefix::I, Prefix::I, Tag::Diff),
@@ -352,7 +366,7 @@ impl<'a> Token<'a> {
         (Prefix::B, Prefix::I, Tag::Diff),
         (Prefix::B, Prefix::B, Tag::Same),
     ];
-    const IOE1_ALLOWED_PREFIXES: [Prefix; 3] = [Prefix::I, Prefix::O, Prefix::E];
+    pub(crate) const IOE1_ALLOWED_PREFIXES: [Prefix; 3] = [Prefix::I, Prefix::O, Prefix::E];
     const IOE1_START_PATTERNS: [(Prefix, Prefix, Tag); 4] = [
         (Prefix::O, Prefix::I, Tag::Any),
         (Prefix::I, Prefix::I, Tag::Diff),
@@ -371,7 +385,7 @@ impl<'a> Token<'a> {
         (Prefix::E, Prefix::E, Tag::Same),
     ];
 
-    const IOB2_ALLOWED_PREFIXES: [Prefix; 3] = [Prefix::I, Prefix::O, Prefix::B];
+    pub(crate) const IOB2_ALLOWED_PREFIXES: [Prefix; 3] = [Prefix::I, Prefix::O, Prefix::B];
     const IOB2_START_PATTERNS: [(Prefix, Prefix, Tag); 1] = [(Prefix::Any, Prefix::B, Tag::Any)];
     const IOB2_INSIDE_PATTERNS: [(Prefix, Prefix, Tag); 2] = [
         (Prefix::B, Prefix::I, Tag::Same),
@@ -385,7 +399,7 @@ impl<'a> Token<'a> {
         (Prefix::B, Prefix::I, Tag::Diff),
         (Prefix::B, Prefix::B, Tag::Any),
     ];
-    const IOE2_ALLOWED_PREFIXES: [Prefix; 3] = [Prefix::I, Prefix::O, Prefix::E];
+    pub(crate) const IOE2_ALLOWED_PREFIXES: [Prefix; 3] = [Prefix::I, Prefix::O, Prefix::E];
     const IOE2_START_PATTERNS: [(Prefix, Prefix, Tag); 6] = [
         (Prefix::O, Prefix::I, Tag::Any),
         (Prefix::O, Prefix::E, Tag::Any),
@@ -400,7 +414,7 @@ impl<'a> Token<'a> {
     ];
     const IOE2_END_PATTERNS: [(Prefix, Prefix, Tag); 1] = [(Prefix::E, Prefix::Any, Tag::Any)];
 
-    const IOBES_ALLOWED_PREFIXES: [Prefix; 5] =
+    pub(crate) const IOBES_ALLOWED_PREFIXES: [Prefix; 5] =
         [Prefix::I, Prefix::O, Prefix::E, Prefix::B, Prefix::S];
     const IOBES_START_PATTERNS: [(Prefix, Prefix, Tag); 4] = [
         (Prefix::B, Prefix::I, Tag::Same),
@@ -417,7 +431,7 @@ impl<'a> Token<'a> {
         (Prefix::E, Prefix::Any, Tag::Any),
     ];
 
-    const BILOU_ALLOWED_PREFIXES: [Prefix; 5] =
+    pub(crate) const BILOU_ALLOWED_PREFIXES: [Prefix; 5] =
         [Prefix::I, Prefix::O, Prefix::U, Prefix::B, Prefix::O];
     const BILOU_START_PATTERNS: [(Prefix, Prefix, Tag); 2] = [
         (Prefix::Any, Prefix::B, Tag::Any),
