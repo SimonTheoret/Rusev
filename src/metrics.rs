@@ -665,6 +665,7 @@ fn par_replace<Data: PartialEq + Send + Sync + Copy, D: Dimension>(
     array
 }
 
+#[inline(always)]
 /// Main entrypoint of the Rusev library. This function computes the precision, recall, fscore and
 /// support of the true and predicted tokens. It returns information about the individual classes
 /// and different overall averages. The returned structure can be used to prettyprint the results.
