@@ -9,3 +9,6 @@ dependencies = [
     "torch>=2.5.1",
     "transformers>=4.46.3",
 ]
+
+[tool.pyright]
+typeCheckingMode = "basic"
