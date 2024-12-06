@@ -1,1 +1,1 @@
-This folder contains the code necessary to generate the benchmarking corpus.
+This folder contains the necessary code to generate the benchmarking corpus.
