@@ -13,6 +13,7 @@ use std::{
 
 mod autodetect;
 mod schemes;
+mod datastructure;
 
 // Re-exporting
 pub use schemes::{InvalidToken, ParsingError, SchemeType};
@@ -221,6 +222,7 @@ struct ExtendedTokensIterator<'a> {
 }
 impl<'a> Iterator for ExtendedTokensIterator<'a> {
     type Item = Result<Token<'a>, ParsingError<String>>;
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         let ret = match self.index.cmp(&self.total_len) {
             Ordering::Greater => None,
@@ -548,6 +550,7 @@ pub(crate) trait TryFromVecStrict<'a, T: Into<&'a str>> {
 
 impl<'a, T: Into<&'a str>> TryFromVecStrict<'a, T> for Entities<'a> {
     type Error = ConversionError<String>;
+    #[inline(always)]
     fn try_from_vecs_strict(
         vec_of_tokens_2d: Vec<Vec<T>>,
         scheme: SchemeType,

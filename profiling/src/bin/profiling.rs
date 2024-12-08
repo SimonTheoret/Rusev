@@ -118,7 +118,7 @@ fn main() {
         total_duration += elapsed;
     }
     println!(
-        "Total duration: {:?} with {n_samples} samples",
-        total_duration
+        "Total duration: {} with {n_samples} samples",
+        total_duration.as_secs_f64()
     )
 }
