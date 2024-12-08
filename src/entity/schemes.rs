@@ -240,6 +240,7 @@ impl<'a> InnerToken<'a> {
     /// * `suffix`: Marker indicating if prefix is located at the end (when suffix is true) or the
     ///   end (when suffix is false) of the token
     /// * `delimiter`: Indicates the char used to separate the Prefix from the rest of the tag
+    #[inline(always)]
     pub(super) fn try_new(
         token: Cow<'a, str>,
         suffix: bool,

@@ -1,9 +1,5 @@
-use crate::entity::{
-    get_entities_lenient, schemes::Prefix, schemes::SchemeType, Entities, InnerToken, Token,
-    TryFromVecStrict, UserPrefix,
-};
+use crate::entity::{schemes::SchemeType, InnerToken, UserPrefix};
 use ahash::AHashSet;
-use enum_iterator::all;
 use std::{borrow::Cow, error::Error, fmt::Display, sync::LazyLock};
 
 static ALLOWED_IOB2_PREFIXES: LazyLock<[AHashSet<UserPrefix>; 4]> = LazyLock::new(|| {

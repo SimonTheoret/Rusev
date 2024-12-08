@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
+use pprof::criterion::{Output, PProfProfiler};
 use rusev::classification_report;
 use serde::Deserialize;
 use serde_jsonlines::json_lines;
@@ -48,8 +49,8 @@ fn build_vecs(path: &'static str) -> (Vec<Vec<&'static str>>, Vec<Vec<&'static s
 }
 
 fn benchmark_small_dataset(c: &mut Criterion) {
-    let (true_vec, pred_vec) = build_vecs("./data/datasets/huge_dataset.jsonl");
-    c.bench_function("big_dataset_report", |b| {
+    let (true_vec, pred_vec) = build_vecs("./data/datasets/small_dataset.jsonl");
+    c.bench_function("small_dataset_report", |b| {
         b.iter(|| {
             classification_report(
                 true_vec.clone(),
@@ -68,7 +69,7 @@ fn benchmark_small_dataset(c: &mut Criterion) {
 }
 fn benchmark_huge_dataset(c: &mut Criterion) {
     let (true_vec, pred_vec) = build_vecs("./data/datasets/huge_dataset.jsonl");
-    c.bench_function("big_dataset_report", |b| {
+    c.bench_function("huge_dataset_report", |b| {
         b.iter(|| {
             classification_report(
                 true_vec.clone(),
@@ -87,7 +88,7 @@ fn benchmark_huge_dataset(c: &mut Criterion) {
 }
 fn benchmark_full_dataset(c: &mut Criterion) {
     let (true_vec, pred_vec) = build_vecs("./data/datasets/full_dataset.jsonl");
-    c.bench_function("big_dataset_report", |b| {
+    c.bench_function("full_dataset_report", |b| {
         b.iter(|| {
             classification_report(
                 true_vec.clone(),
@@ -125,11 +126,11 @@ fn benchmark_big_dataset(c: &mut Criterion) {
 }
 
 criterion_group!(
-    name=report_benches;
-    config = Criterion::default().sample_size(10);
+    name=long_report_benches;
+    config = Criterion::default().sample_size(50).with_profiler(PProfProfiler::new(3000, Output::Flamegraph(None)));
     targets = benchmark_big_dataset,
     benchmark_full_dataset,
     benchmark_small_dataset,
     benchmark_huge_dataset
 );
-criterion_main!(report_benches);
+criterion_main!(long_report_benches);

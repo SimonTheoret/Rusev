@@ -226,6 +226,7 @@ fn check_consistent_length<T>(
 /// predicted sum, true positive sum and true sum
 type ActualTPCorrect<T> = (Array1<T>, Array1<T>, Array1<T>);
 
+#[inline(always)]
 fn extract_tp_actual_correct_strict<'a>(
     y_true: Vec<Vec<&'a str>>,
     y_pred: Vec<Vec<&'a str>>,

@@ -336,7 +336,7 @@ struct EntitiesIterAdaptor<'a> {
 
 impl<'a> Iterator for EntitiesIterAdaptor<'a> {
     type Item = Option<Result<Entity<'a>, InvalidToken>>;
-    #[inline]
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         let ret: Option<Option<Result<Entity<'a>, InvalidToken>>>;
         if self.index >= self.len - 1 {

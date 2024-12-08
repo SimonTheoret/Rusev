@@ -9,7 +9,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [workspace]
-members = [".", "rusev_macro"]
+members = [".", "rusev_macro", "profiling"]
 
 [workspace.package]
 version = "0.1.0"
@@ -41,7 +41,11 @@ quickcheck = "1.0.3"
 quickcheck_macros = "1.0.0"
 criterion = { version = "0.5", features = ["html_reports"] }
 serde-jsonlines = "0.6.0"
+pprof = { version = "0.14.0", features = ["criterion", "flamegraph"] }
 
 [[bench]]
 name = "classification_report"
 harness = false
+
+# [[bin]]
+# name = "profiling"
