@@ -127,7 +127,7 @@ fn benchmark_big_dataset(c: &mut Criterion) {
 
 criterion_group!(
     name=long_report_benches;
-    config = Criterion::default().sample_size(50).with_profiler(PProfProfiler::new(3000, Output::Flamegraph(None)));
+    config = Criterion::default().sample_size(100).with_profiler(PProfProfiler::new(3000, Output::Flamegraph(None)));
     targets = benchmark_big_dataset,
     benchmark_full_dataset,
     benchmark_small_dataset,

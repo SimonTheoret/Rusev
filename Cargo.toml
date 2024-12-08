@@ -49,7 +49,9 @@ harness = false
 
 [profile.release]
 lto="fat"
-codegen-units=1
+# Reduction in performance when using codegen-units=1
+# codegen-units=1
 
+# Reduction in performance when using these instructions:
 # [build]
 # rustflags = ["-C", "target-cpu=native"]
