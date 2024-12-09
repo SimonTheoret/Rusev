@@ -1,10 +1,10 @@
 /// Custom datastructure built for reducing cache misses.
-struct FlattenedListOfVec<'a> {
+struct TokenVecs<'a> {
     tokens: Box<[&'a str]>,
     indices: Box<[usize]>,
 }
 
-impl<'a> From<Vec<Vec<&'a str>>> for FlattenedListOfVec<'a> {
+impl<'a> From<Vec<Vec<&'a str>>> for TokenVecs<'a> {
     fn from(value: Vec<Vec<&'a str>>) -> Self {
         let length: usize = value.iter().map(|v| v.len()).sum();
         let indices_length = value.len();
