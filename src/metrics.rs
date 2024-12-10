@@ -1,3 +1,4 @@
+use crate::datastructure::TokenVecs;
 use crate::entity::{
     get_entities_lenient, ConversionError, Entities, InvalidToken, ParsingError, SchemeType,
     TryFromVecStrict,
@@ -228,8 +229,8 @@ type ActualTPCorrect<T> = (Array1<T>, Array1<T>, Array1<T>);
 
 #[inline(always)]
 fn extract_tp_actual_correct_strict<'a>(
-    y_true: Vec<Vec<&'a str>>,
-    y_pred: Vec<Vec<&'a str>>,
+    y_true: TokenVecs<&'a str>,
+    y_pred: TokenVecs<&'a str>,
     scheme: SchemeType,
     suffix: bool,
     delimiter: char,
@@ -694,14 +695,16 @@ pub fn classification_report<'a>(
     strict: bool,
 ) -> Result<Reporter, ComputationError<String>> {
     check_consistent_length(y_true.as_ref(), y_pred.as_ref())?;
+    let y_true_struct = TokenVecs::from(y_true);
+    let y_pred_struct = TokenVecs::from(y_pred);
     let sample_weight_array = sample_weight.map(|x| ArcArray::from_vec(x));
     let entities_true = if strict {
-        Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter)?
+        Entities::from_tokens_vecs(y_true_struct, scheme, suffix, delimiter)?
     } else {
         get_entities_lenient(y_true.as_ref(), suffix, delimiter)?
     };
     let entities_pred = if strict {
-        Entities::try_from_vecs_strict(y_pred, scheme, suffix, delimiter)?
+        Entities::from_tokens_vecs(y_pred_struct, scheme, suffix, delimiter)?
     } else {
         get_entities_lenient(y_pred.as_ref(), suffix, delimiter)?
     };

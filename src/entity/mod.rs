@@ -1,3 +1,4 @@
+use crate::datastructure::TokenVecs;
 use crate::entity::schemes::{InnerToken, Token, UserPrefix};
 use ahash::AHashSet;
 use std::{
@@ -13,7 +14,6 @@ use std::{
 
 mod autodetect;
 mod schemes;
-mod datastructure;
 
 // Re-exporting
 pub use schemes::{InvalidToken, ParsingError, SchemeType};
@@ -42,28 +42,31 @@ impl<'a> Display for Entity<'a> {
 
 /// Leniently retrieves the entities from a sequence.
 pub(crate) fn get_entities_lenient<'a>(
-    sequence: &'a [Vec<&'a str>],
+    sequence: &'a TokenVecs<Cow<'a, str>>,
     suffix: bool,
     delimiter: char,
 ) -> Result<Entities<'a>, ParsingError<String>> {
-    let mut res = vec![];
-    for vec_of_chunks in sequence.iter() {
-        let vec_of_entities: Result<Vec<_>, _> =
-            LenientChunkIter::new(vec_of_chunks, suffix, delimiter).collect();
-        res.push(vec_of_entities?)
+    let mut res = Vec::with_capacity(sequence.len() / 2 as usize);
+    for vec_of_chunks in sequence.iter_vec() {
+        let chunk_iter = LenientChunkIter::new(vec_of_chunks, suffix, delimiter);
+        for entity in chunk_iter {
+            res.push(entity?);
+        }
     }
+
+    // let res =
     Ok(Entities(res))
 }
 
 /// This wrapper around the content iterator appends a single `"O"` at the end of its inner
 /// iterator.
 struct InnerLenientChunkIter<'a> {
-    content: Iter<'a, &'a str>,
+    content: Iter<'a, Cow<'a, str>>,
     is_at_end: bool,
 }
 
 impl<'a> InnerLenientChunkIter<'a> {
-    fn new(seq: &'a [&'a str]) -> Self {
+    fn new(seq: &'a [Cow<'a, str>]) -> Self {
         InnerLenientChunkIter {
             content: seq.iter(),
             is_at_end: false,
@@ -104,7 +107,7 @@ struct LenientChunkIter<'a> {
 }
 
 impl<'a> LenientChunkIter<'a> {
-    fn new(sequence: &'a [&'a str], suffix: bool, delimiter: char) -> Self {
+    fn new(sequence: &'a [Cow<'a, str>], suffix: bool, delimiter: char) -> Self {
         LenientChunkIter {
             inner: InnerLenientChunkIter::new(sequence),
             prev_type: None,
@@ -212,7 +215,7 @@ impl<'a> LenientChunkIter<'a> {
 /// iteration, it returns as last token the `'O'` tag.
 struct ExtendedTokensIterator<'a> {
     outside_token: Token<'a>,
-    tokens: Vec<Cow<'a, str>>,
+    tokens: &'a mut [Cow<'a, str>],
     scheme: SchemeType,
     suffix: bool,
     delimiter: char,
@@ -243,7 +246,7 @@ impl<'a> Iterator for ExtendedTokensIterator<'a> {
 impl<'a> ExtendedTokensIterator<'a> {
     fn new(
         outside_token: Token<'a>,
-        tokens: Vec<Cow<'a, str>>,
+        tokens: &'a mut [Cow<'a, str>],
         scheme: SchemeType,
         suffix: bool,
         delimiter: char,
@@ -270,7 +273,7 @@ struct Tokens<'a> {
 }
 impl<'a> Tokens<'a> {
     fn new(
-        tokens: Vec<Cow<'a, str>>,
+        tokens: &'a mut [Cow<'a, str>],
         scheme: SchemeType,
         suffix: bool,
         delimiter: char,
@@ -503,10 +506,10 @@ impl<S: AsRef<str> + Debug> Error for ConversionError<S> {}
 #[derive(Debug, PartialEq, Clone)]
 /// Entites are the unique tokens contained in a sequence. Entities can be built with the
 /// TryFromVec trait. This trait allows to collect from a vec
-pub struct Entities<'a>(Vec<Vec<Entity<'a>>>);
+pub struct Entities<'a>(TokenVecs<Entity<'a>>);
 
 impl<'a> Deref for Entities<'a> {
-    type Target = Vec<Vec<Entity<'a>>>;
+    type Target = TokenVecs<Entity<'a>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -518,11 +521,9 @@ impl<'a> DerefMut for Entities<'a> {
     }
 }
 
-impl<'a> IntoIterator for Entities<'a> {
-    type Item = Entity<'a>;
-    type IntoIter = std::iter::Flatten<std::vec::IntoIter<Vec<Entity<'a>>>>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter().flatten()
+impl<'a> Entities<'a> {
+    fn iter(&'a self) -> Iter<'a, Entity<'a>> {
+        self.0.iter()
     }
 }
 
@@ -541,7 +542,7 @@ impl<'a> IntoIterator for Entities<'a> {
 pub(crate) trait TryFromVecStrict<'a, T: Into<&'a str>> {
     type Error: Error;
     fn try_from_vecs_strict(
-        tokens: Vec<Vec<T>>,
+        tokens: TokenVecs<Cow<'a, str>>,
         scheme: SchemeType,
         suffix: bool,
         delimiter: char,
@@ -552,14 +553,13 @@ impl<'a, T: Into<&'a str>> TryFromVecStrict<'a, T> for Entities<'a> {
     type Error = ConversionError<String>;
     #[inline(always)]
     fn try_from_vecs_strict(
-        vec_of_tokens_2d: Vec<Vec<T>>,
+        vec_of_tokens_2d: TokenVecs<Cow<'a, str>>,
         scheme: SchemeType,
         suffix: bool,
         delimiter: char,
     ) -> Result<Entities<'a>, Self::Error> {
         let vec_of_tokens: Result<Vec<_>, ParsingError<String>> = vec_of_tokens_2d
-            .into_iter()
-            .map(|v| v.into_iter().map(|x| Cow::from(x.into())).collect())
+            .iter_vec()
             .map(|v| Tokens::new(v, scheme, suffix, delimiter))
             .collect();
         let entities: Result<Vec<Vec<Entity>>, InvalidToken> = match vec_of_tokens {

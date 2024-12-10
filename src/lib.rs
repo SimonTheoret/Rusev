@@ -35,6 +35,7 @@ the letters of the scheme, such as I-O-B or I-O-E. Prefix can only be a single a
 mod entity;
 mod metrics;
 mod reporter;
+mod datastructure;
 
 // The public api starts here
 pub use entity::SchemeType;
