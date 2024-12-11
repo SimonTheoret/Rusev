@@ -4,8 +4,8 @@ use std::slice::{Iter, IterMut};
 /// Custom datastructure built for reducing cache misses.
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Clone)]
 pub(crate) struct TokenVecs<T> {
-    tokens: Box<[T]>,
-    indices: Box<[usize]>,
+    pub(crate) tokens: Box<[T]>,
+    pub(crate) indices: Box<[usize]>,
 }
 
 impl<'a> TokenVecs<Cow<'a, str>> {
@@ -17,9 +17,62 @@ impl<'a> TokenVecs<Cow<'a, str>> {
     }
 }
 
-impl<T> FromIterator<T> for TokenVecs<T> {
-    fn from_iter<T: IntoIterator<Item = T>>(iter: T) -> Self {
+impl<'a, T> TokenVecs<T> {
+    pub(crate) fn from_map<F, Y>(value: Vec<Vec<Y>>, f: F) -> Self
+    where
+        F: Fn(Y) -> T,
+    {
+        let length: usize = value.iter().map(|v| v.len()).sum();
+        let indices_length = value.len();
+        let mut flattened = Vec::with_capacity(length);
+        let mut indices = Vec::with_capacity(indices_length);
+        let mut current_indice = 0;
+        indices.push(0);
+        for vec in value.into_iter() {
+            let mut count = 0;
+            for s in vec {
+                current_indice += 1;
+                count += 1;
+                flattened.push(f(s));
+            }
+            if count == 0 {
+                indices.push(current_indice);
+            }
+        }
+        let tokens = flattened.into_boxed_slice();
+        let indices_boxed = indices.into_boxed_slice();
+        Self {
+            tokens,
+            indices: indices_boxed,
+        }
+    }
+}
 
+impl<'a, T> From<Vec<Vec<T>>> for TokenVecs<T> {
+    fn from(value: Vec<Vec<T>>) -> Self {
+        let length: usize = value.iter().map(|v| v.len()).sum();
+        let indices_length = value.len();
+        let mut flattened = Vec::with_capacity(length);
+        let mut indices = Vec::with_capacity(indices_length);
+        let mut current_indice = 0;
+        indices.push(0);
+        for vec in value.into_iter() {
+            let mut count = 0;
+            for s in vec {
+                current_indice += 1;
+                count += 1;
+                flattened.push(s);
+            }
+            if count == 0 {
+                indices.push(current_indice);
+            }
+        }
+        let tokens = flattened.into_boxed_slice();
+        let indices_boxed = indices.into_boxed_slice();
+        Self {
+            tokens,
+            indices: indices_boxed,
+        }
     }
 }
 
@@ -46,6 +99,21 @@ impl<'a> From<Vec<Vec<&'a str>>> for TokenVecs<Cow<'a, str>> {
             tokens,
             indices: indices_boxed,
         }
+    }
+}
+
+impl<'a, T> TokenVecs<T> {
+    pub(crate) fn iter(&'a self) -> Iter<'a, T> {
+        self.tokens.iter()
+    }
+    pub(crate) fn iter_mut(&'a mut self) -> IterMut<'a, T> {
+        self.tokens.iter_mut()
+    }
+    pub(crate) fn iter_vec(&'a self) -> VecsIter<'a, T> {
+        VecsIter::new(&self)
+    }
+    pub(crate) fn iter_vec_mut(&'a mut self) -> VecsIterMut<'a, T> {
+        VecsIterMut::new(self)
     }
 }
 
@@ -82,15 +150,33 @@ impl<'a, T> Iterator for VecsIter<'a, T> {
     }
 }
 
-impl<'a, T> TokenVecs<T> {
-    pub(crate) fn iter(&'a self) -> Iter<'a, T> {
-        self.tokens.iter()
+struct VecsIterMut<T> {
+    indice_index: usize,
+    token_vecs: TokenVecs<T>,
+    counter: usize,
+}
+
+impl<T> VecsIterMut<T> {
+    fn new(token_vecs: TokenVecs<T>) -> Self {
+        Self {
+            indice_index: 0,
+            token_vecs,
+            counter: 0,
+        }
     }
-    pub(crate) fn iter_mut(&'a mut self) -> IterMut<'a, T> {
-        self.tokens.iter_mut()
-    }
-    pub(crate) fn iter_vec(&'a self) -> VecsIter<'a, T> {
-        VecsIter::new(&self)
+}
+impl<T> Iterator for VecsIterMut<T> {
+    type Item = &[T];
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.counter >= self.token_vecs.indices.len() - 1 {
+            return None;
+        }
+        //TODO: Change these unwraps to something better
+        let start = *self.token_vecs.indices.get(self.indice_index).unwrap();
+        let end = *self.token_vecs.indices.get(self.indice_index + 1).unwrap();
+        self.counter += 1;
+        self.indice_index += 1;
+        self.token_vecs.tokens.get(start..end)
     }
 }
 

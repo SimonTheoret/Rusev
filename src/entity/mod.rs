@@ -41,21 +41,26 @@ impl<'a> Display for Entity<'a> {
 }
 
 /// Leniently retrieves the entities from a sequence.
+#[inline(always)]
 pub(crate) fn get_entities_lenient<'a>(
     sequence: &'a TokenVecs<Cow<'a, str>>,
     suffix: bool,
     delimiter: char,
 ) -> Result<Entities<'a>, ParsingError<String>> {
     let mut res = Vec::with_capacity(sequence.len() / 2 as usize);
+    let mut indices = Vec::with_capacity(sequence.len() / 2 as usize);
+    indices.push(0);
     for vec_of_chunks in sequence.iter_vec() {
         let chunk_iter = LenientChunkIter::new(vec_of_chunks, suffix, delimiter);
+        indices.push(vec_of_chunks.len());
         for entity in chunk_iter {
             res.push(entity?);
         }
     }
-
-    // let res =
-    Ok(Entities(res))
+    Ok(Entities(TokenVecs {
+        tokens: res.into_boxed_slice(),
+        indices: indices.into(),
+    }))
 }
 
 /// This wrapper around the content iterator appends a single `"O"` at the end of its inner
@@ -560,22 +565,37 @@ impl<'a, T: Into<&'a str>> TryFromVecStrict<'a, T> for Entities<'a> {
     ) -> Result<Entities<'a>, Self::Error> {
         let vec_of_tokens: Result<Vec<_>, ParsingError<String>> = vec_of_tokens_2d
             .iter_vec()
-            .map(|v| Tokens::new(v, scheme, suffix, delimiter))
+            .map(|&mut v| Tokens::new(v, scheme, suffix, delimiter))
             .collect();
-        let entities: Result<Vec<Vec<Entity>>, InvalidToken> = match vec_of_tokens {
-            Ok(vec_of_toks) => vec_of_toks
-                .into_iter()
-                .map(|t| EntitiesIter::new(t).collect())
-                .collect(),
-            Err(msg) => Err(ConversionError::from(msg))?,
+        let tokens = match vec_of_tokens {
+            Ok(vec) => vec,
+            Err(err) => return Err(err.into()),
         };
-        Ok(Entities::new(entities?))
+        let res: Result<Vec<Vec<Entity>>, _> = tokens
+            .into_iter()
+            .map(|t| EntitiesIter::new(t).collect())
+            .collect();
+        match res {
+            Ok(vec_of_vecs) => {
+                let tok = TokenVecs::from(vec_of_vecs);
+                Ok(Entities::new(tok))
+            }
+            Err(e) => Err(e.into()),
+        }
+        // let entities = match vec_of_tokens {
+        //     Ok(vec_of_toks) => vec_of_toks
+        //         .into_iter()
+        //         .map(|t| EntitiesIter::new(t).collect())
+        //         .collect(),
+        //     Err(msg) => Err(ConversionError::from(msg))?,
+        // };
+        // Ok(Entities::new(entities?))
     }
 }
 
 impl<'a> Entities<'a> {
     /// Consumes the 2D array of vecs and builds the Entities.
-    pub(crate) fn new(entities: Vec<Vec<Entity<'a>>>) -> Self {
+    pub(crate) fn new(entities: TokenVecs<Entity<'a>>) -> Self {
         Entities(entities)
     }
 
@@ -583,16 +603,11 @@ impl<'a> Entities<'a> {
     #[inline(always)]
     /// Filters the entities for a given tag name and returns them in a HashSet.
     ///
-    /// * `tag_name`: This variable is used to compare the tag of the
-    ///   entity with. Only those whose tag is equal to a reference to
-    ///   `tag_name` are added into the returned HashSet.
+    /// * `tag_name`: This variable is used to compare the tag of the entity with. Only those whose
+    /// tag is equal to a reference to `tag_name` are added into the returned HashSet.
     pub fn filter<S: AsRef<str>>(&self, tag_name: S) -> AHashSet<&Entity> {
         let tag_name_ref = tag_name.as_ref();
-        AHashSet::from_iter(
-            self.iter()
-                .flat_map(|v| v.iter())
-                .filter(|e| e.tag == tag_name_ref),
-        )
+        AHashSet::from_iter(self.iter().filter(|e| e.tag == tag_name_ref))
     }
 
     /// Filters the entities for a given tag name and return the number of entities..
@@ -602,14 +617,11 @@ impl<'a> Entities<'a> {
     ///   `tag_name` are added into the returned HashSet.
     pub fn filter_count<S: AsRef<str>>(&self, tag_name: S) -> usize {
         let tag_name_ref = tag_name.as_ref();
-        self.iter()
-            .flat_map(|v| v.iter())
-            .filter(|e| e.tag == tag_name_ref)
-            .count()
+        self.iter().filter(|e| e.tag == tag_name_ref).count()
     }
 
     pub fn unique_tags(&self) -> AHashSet<&str> {
-        AHashSet::from_iter(self.iter().flat_map(|v| v.iter()).map(|e| e.tag.borrow()))
+        AHashSet::from_iter(self.iter().map(|e| e.tag.borrow()))
     }
 }
 
