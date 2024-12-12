@@ -1,4 +1,4 @@
-use crate::datastructure::{TokenVecs, VecsIterMut};
+use crate::datastructure::TokenVecs;
 use crate::entity::schemes::{InnerToken, Token, UserPrefix};
 use ahash::AHashSet;
 use std::{
@@ -951,7 +951,10 @@ pub(super) mod tests {
         ];
         let expected_tokens = entities.into_boxed_slice();
         let expected_indices = Box::new([0, tokens.len()]);
-        let expected_inner = TokenVecs{tokens:expected_tokens, indices: expected_indices};
+        let expected_inner = TokenVecs {
+            tokens: expected_tokens,
+            indices: expected_indices,
+        };
         let expected = Entities(expected_inner);
         assert_eq!(actual, expected)
     }
@@ -993,22 +996,6 @@ pub(super) mod tests {
         assert_eq!(expected, actual)
     }
 
-    // fn build_tokens() -> Tokens<'static> {
-    //     let mut tokens = build_tokens_vec_str();
-    //     let tok_ref = tokens.as_mut_slice();
-    //     let scheme = SchemeType::IOB2;
-    //     let delimiter = '-';
-    //     let suffix = false;
-    //     Tokens::new(tok_ref, scheme, suffix, delimiter).unwrap();
-    // }
-    fn build_tokens_vec() -> Vec<Cow<'static, str>> {
-        vec![
-            Cow::from("B-PER"),
-            Cow::from("I-PER"),
-            Cow::from("O"),
-            Cow::from("B-LOC"),
-        ]
-    }
     fn build_tokens_vec_str() -> Vec<&'static str> {
         vec!["B-PER", "I-PER", "O", "B-LOC"]
     }

@@ -94,7 +94,6 @@ struct AutoDetectConfig<'a> {
     tokens: &'a [Vec<&'a str>],
     delimiter: char,
     suffix: bool,
-    lenient: bool,
 }
 
 /// We can try to auto-detect the SchemeType used. This would allow to simplify the interface of
@@ -151,7 +150,6 @@ mod test {
             tokens: &inputs,
             delimiter: '-',
             suffix: false,
-            lenient: false,
         };
         let actual = SchemeType::try_auto_detect_by_prefix(&config).unwrap();
         let expected = SchemeType::IOB2;

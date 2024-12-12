@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::marker::PhantomData;
-use std::slice::{Iter, IterMut};
+use std::slice::Iter;
 
 /// Custom datastructure built for reducing cache misses.
 #[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Clone, Default)]
@@ -27,14 +27,10 @@ impl<'a, T> From<Vec<Vec<T>>> for TokenVecs<T> {
         let indices_length = value.len();
         let mut flattened = Vec::with_capacity(length);
         let mut indices = Vec::with_capacity(indices_length);
-        let mut current_indice = 0;
         indices.push(0);
         for vec in value.into_iter() {
-            let mut count = 0;
             indices.push(indices.last().unwrap() + vec.len());
             for s in vec {
-                current_indice += 1;
-                count += 1;
                 flattened.push(s);
             }
         }
@@ -76,9 +72,6 @@ impl<'a> From<Vec<Vec<&'a str>>> for TokenVecs<Cow<'a, str>> {
 impl<'a, T> TokenVecs<T> {
     pub(crate) fn iter(&'a self) -> Iter<'a, T> {
         self.tokens.iter()
-    }
-    pub(crate) fn iter_mut(&'a mut self) -> IterMut<'a, T> {
-        self.tokens.iter_mut()
     }
     pub(crate) fn iter_vec(&'a self) -> VecsIter<'a, T> {
         VecsIter::new(&self)
