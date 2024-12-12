@@ -563,14 +563,14 @@ impl<'a, T: Into<&'a str>> TryFromVecStrict<'a, T> for Entities<'a> {
         suffix: bool,
         delimiter: char,
     ) -> Result<Entities<'a>, Self::Error> {
-        let vec_of_tokens: Result<Vec<_>, ParsingError<String>> = vec_of_tokens_2d
-            .iter_vec()
-            .map(|&mut v| Tokens::new(v, scheme, suffix, delimiter))
-            .collect();
-        let tokens = match vec_of_tokens {
-            Ok(vec) => vec,
-            Err(err) => return Err(err.into()),
-        };
+        let mut tokens = Vec::with_capacity(vec_of_tokens_2d.len());
+        let mut_iter = RefCell::new(vec_of_tokens_2d.iter_vec_mut());
+        while let Some(v) = mut_iter.borrow_mut().custom_next() {
+            match Tokens::new(v, scheme, suffix, delimiter) {
+                Ok(t) => tokens.push(t),
+                Err(e) => Err(e)?,
+            }
+        }
         let res: Result<Vec<Vec<Entity>>, _> = tokens
             .into_iter()
             .map(|t| EntitiesIter::new(t).collect())

@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::marker::PhantomData;
 use std::slice::{Iter, IterMut};
 
 /// Custom datastructure built for reducing cache misses.
@@ -112,7 +113,7 @@ impl<'a, T> TokenVecs<T> {
     pub(crate) fn iter_vec(&'a self) -> VecsIter<'a, T> {
         VecsIter::new(&self)
     }
-    pub(crate) fn iter_vec_mut(&'a mut self) -> VecsIterMut<'a, T> {
+    pub(crate) fn iter_vec_mut(self) -> VecsIterMut<'a, T> {
         VecsIterMut::new(self)
     }
 }
@@ -150,24 +151,25 @@ impl<'a, T> Iterator for VecsIter<'a, T> {
     }
 }
 
-struct VecsIterMut<T> {
+struct VecsIterMut<'a, T> {
     indice_index: usize,
     token_vecs: TokenVecs<T>,
     counter: usize,
+    phantom_data: PhantomData<&'a T>,
 }
 
-impl<T> VecsIterMut<T> {
+impl<'a, T> VecsIterMut<'a, T> {
     fn new(token_vecs: TokenVecs<T>) -> Self {
         Self {
             indice_index: 0,
             token_vecs,
             counter: 0,
+            phantom_data: PhantomData,
         }
     }
 }
-impl<T> Iterator for VecsIterMut<T> {
-    type Item = &[T];
-    fn next(&mut self) -> Option<Self::Item> {
+impl<'a, T> VecsIterMut<'a, T> {
+    pub(crate) fn custom_next(&mut self) -> Option<&mut [T]> {
         if self.counter >= self.token_vecs.indices.len() - 1 {
             return None;
         }
@@ -176,7 +178,7 @@ impl<T> Iterator for VecsIterMut<T> {
         let end = *self.token_vecs.indices.get(self.indice_index + 1).unwrap();
         self.counter += 1;
         self.indice_index += 1;
-        self.token_vecs.tokens.get(start..end)
+        self.token_vecs.tokens.get_mut(start..end)
     }
 }
 
