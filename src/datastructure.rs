@@ -3,49 +3,21 @@ use std::marker::PhantomData;
 use std::slice::{Iter, IterMut};
 
 /// Custom datastructure built for reducing cache misses.
-#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Clone)]
+#[derive(Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Clone, Default)]
 pub(crate) struct TokenVecs<T> {
     pub(crate) tokens: Box<[T]>,
     pub(crate) indices: Box<[usize]>,
 }
 
-impl<'a> TokenVecs<Cow<'a, str>> {
-    fn new(vecs: Vec<Vec<&'a str>>) -> Self {
+impl<'a> TokenVecs<&'a str> {
+    pub(crate) fn new(vecs: Vec<Vec<&'a str>>) -> Self {
         Self::from(vecs)
-    }
-    pub(crate) fn len(&self) -> usize {
-        self.tokens.len()
     }
 }
 
 impl<'a, T> TokenVecs<T> {
-    pub(crate) fn from_map<F, Y>(value: Vec<Vec<Y>>, f: F) -> Self
-    where
-        F: Fn(Y) -> T,
-    {
-        let length: usize = value.iter().map(|v| v.len()).sum();
-        let indices_length = value.len();
-        let mut flattened = Vec::with_capacity(length);
-        let mut indices = Vec::with_capacity(indices_length);
-        let mut current_indice = 0;
-        indices.push(0);
-        for vec in value.into_iter() {
-            let mut count = 0;
-            for s in vec {
-                current_indice += 1;
-                count += 1;
-                flattened.push(f(s));
-            }
-            if count == 0 {
-                indices.push(current_indice);
-            }
-        }
-        let tokens = flattened.into_boxed_slice();
-        let indices_boxed = indices.into_boxed_slice();
-        Self {
-            tokens,
-            indices: indices_boxed,
-        }
+    pub(crate) fn len(&self) -> usize {
+        self.tokens.len()
     }
 }
 
@@ -59,13 +31,11 @@ impl<'a, T> From<Vec<Vec<T>>> for TokenVecs<T> {
         indices.push(0);
         for vec in value.into_iter() {
             let mut count = 0;
+            indices.push(indices.last().unwrap() + vec.len());
             for s in vec {
                 current_indice += 1;
                 count += 1;
                 flattened.push(s);
-            }
-            if count == 0 {
-                indices.push(current_indice);
             }
         }
         let tokens = flattened.into_boxed_slice();
@@ -113,12 +83,22 @@ impl<'a, T> TokenVecs<T> {
     pub(crate) fn iter_vec(&'a self) -> VecsIter<'a, T> {
         VecsIter::new(&self)
     }
-    pub(crate) fn iter_vec_mut(self) -> VecsIterMut<'a, T> {
+    pub(crate) fn iter_vec_mut(&'a mut self) -> VecsIterMut<'a, T> {
         VecsIterMut::new(self)
     }
 }
 
-struct VecsIter<'a, T>
+/// This method allocates. It should only be used in the testing environment.
+impl<T> From<TokenVecs<T>> for Vec<Vec<T>>
+where
+    T: Clone,
+{
+    fn from(value: TokenVecs<T>) -> Self {
+        value.iter_vec().map(|v| Vec::from(v)).collect()
+    }
+}
+
+pub(crate) struct VecsIter<'a, T>
 where
     T: 'a,
 {
@@ -139,7 +119,7 @@ impl<'a, T> VecsIter<'a, T> {
 impl<'a, T> Iterator for VecsIter<'a, T> {
     type Item = &'a [T];
     fn next(&mut self) -> Option<Self::Item> {
-        if self.counter >= self.token_vecs.indices.len() - 1 {
+        if self.token_vecs.indices.len() == 0 || self.counter >= self.token_vecs.indices.len() - 1 {
             return None;
         }
         //TODO: Change these unwraps to something better
@@ -151,15 +131,15 @@ impl<'a, T> Iterator for VecsIter<'a, T> {
     }
 }
 
-struct VecsIterMut<'a, T> {
+pub(crate) struct VecsIterMut<'a, T> {
     indice_index: usize,
-    token_vecs: TokenVecs<T>,
+    token_vecs: &'a mut TokenVecs<T>,
     counter: usize,
     phantom_data: PhantomData<&'a T>,
 }
 
 impl<'a, T> VecsIterMut<'a, T> {
-    fn new(token_vecs: TokenVecs<T>) -> Self {
+    fn new(token_vecs: &'a mut TokenVecs<T>) -> Self {
         Self {
             indice_index: 0,
             token_vecs,
@@ -169,7 +149,7 @@ impl<'a, T> VecsIterMut<'a, T> {
     }
 }
 impl<'a, T> VecsIterMut<'a, T> {
-    pub(crate) fn custom_next(&mut self) -> Option<&mut [T]> {
+    pub(crate) fn custom_next<'b: 'a>(&'b mut self) -> Option<&'a mut [T]> {
         if self.counter >= self.token_vecs.indices.len() - 1 {
             return None;
         }
@@ -191,16 +171,7 @@ mod test {
         let vecs = build_vecs();
         let actual = TokenVecs::new(vecs);
         let expected_tokens = Box::new([
-            Cow::from("O"),
-            Cow::from("O"),
-            Cow::from("O"),
-            Cow::from("B-MISC"),
-            Cow::from("I-MISC"),
-            Cow::from("I-MISC"),
-            Cow::from("O"),
-            Cow::from("B-PER"),
-            Cow::from("I-PER"),
-            Cow::from("O"),
+            "O", "O", "O", "B-MISC", "I-MISC", "I-MISC", "O", "B-PER", "I-PER", "O",
         ]);
 
         let expected_indices = Box::new([0, 7, 10]);

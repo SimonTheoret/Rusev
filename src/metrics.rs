@@ -177,26 +177,22 @@ impl Display for InconsistentLengthError {
 }
 impl Error for InconsistentLengthError {}
 
-fn check_vecs_empty<T>(
-    y_true: &[Vec<T>],
-    y_pred: &[Vec<T>],
-) -> Result<(), ComputationError<String>> {
-    let mut y_true_is_empty = true;
-    for v in y_true {
-        if !v.is_empty() {
-            y_true_is_empty = false;
-            break;
-        }
+fn check_vecs_empty<T>(y_true: &[T], y_pred: &[T]) -> Result<(), ComputationError<String>> {
+    let y_true_is_empty: bool;
+    if y_true.is_empty() {
+        y_true_is_empty = true;
+    } else {
+        y_true_is_empty = false;
     }
     if y_true_is_empty {
         return Err(ComputationError::EmptyInput(String::from("y_true")));
     };
 
-    let mut y_pred_is_empty = true;
-    for v in y_pred {
-        if !v.is_empty() {
-            y_pred_is_empty = false;
-        }
+    let y_pred_is_empty: bool;
+    if y_pred.is_empty() {
+        y_pred_is_empty = true;
+    } else {
+        y_pred_is_empty = false;
     }
     if y_pred_is_empty {
         return Err(ComputationError::EmptyInput(String::from("y_pred")));
@@ -229,8 +225,8 @@ type ActualTPCorrect<T> = (Array1<T>, Array1<T>, Array1<T>);
 
 #[inline(always)]
 fn extract_tp_actual_correct_strict<'a>(
-    y_true: TokenVecs<&'a str>,
-    y_pred: TokenVecs<&'a str>,
+    y_true: &'a mut TokenVecs<&'a str>,
+    y_pred: &'a mut TokenVecs<&'a str>,
     scheme: SchemeType,
     suffix: bool,
     delimiter: char,
@@ -271,8 +267,8 @@ fn extract_tp_actual_correct_strict<'a>(
 }
 
 fn extract_tp_actual_correct_lenient<'a>(
-    y_true: Vec<Vec<&'a str>>,
-    y_pred: Vec<Vec<&'a str>>,
+    y_true: &'a TokenVecs<&'a str>,
+    y_pred: &'a TokenVecs<&'a str>,
     _scheme: SchemeType,
     suffix: bool,
     delimiter: char,
@@ -281,12 +277,12 @@ fn extract_tp_actual_correct_lenient<'a>(
     let (entities_true_tmp, entities_pred_tmp) = match entities_true_and_pred {
         Some((e1, e2)) => (e1, e2),
         None => (
-            &get_entities_lenient(y_true.as_ref(), suffix, delimiter)?,
-            &get_entities_lenient(y_pred.as_ref(), suffix, delimiter)?,
+            &get_entities_lenient(y_true, suffix, delimiter)?,
+            &get_entities_lenient(y_pred, suffix, delimiter)?,
         ),
     };
     let mut entities_true_init: AHashMap<&str, AHashSet<(usize, usize)>> = AHashMap::default();
-    for e in entities_true_tmp.iter().flatten() {
+    for e in entities_true_tmp.iter() {
         let (start, end) = (e.start.clone(), e.end.clone());
         match entities_true_init.get_mut(e.tag.as_ref()) {
             Some(set) => {
@@ -304,7 +300,7 @@ fn extract_tp_actual_correct_lenient<'a>(
     //     None => &get_entities_lenient(y_pred.as_ref(), suffix, delimiter)?,
     // };
     let mut entities_pred_init: AHashMap<&str, AHashSet<(usize, usize)>> = AHashMap::default();
-    for e in entities_pred_tmp.iter().flatten() {
+    for e in entities_pred_tmp.iter() {
         let (start, end) = (e.start.clone(), e.end.clone());
         match entities_pred_init.get_mut(e.tag.as_ref()) {
             Some(set) => {
@@ -455,7 +451,6 @@ type PrecisionRecallFScoreTrueSum = (
     Array<usize, Dim<[usize; 1]>>,
 );
 
-//TODO: Check lengths
 /// One of the main entrypoints of the Rusev library. This function computes the precision, recall,
 /// fscore and support of the true and predicted tokens. This method does NOT check the lengths of
 /// `y_true` and `y_pred`.
@@ -485,11 +480,42 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
     suffix: bool,
     delimiter: char,
     parallel: bool,
+    strict: bool,
+) -> Result<PrecisionRecallFScoreTrueSum, ComputationError<String>> {
+    let mut y_true_struct = TokenVecs::new(y_true);
+    let mut y_pred_struct = TokenVecs::new(y_pred);
+    precision_recall_fscore_support_inner(
+        &mut y_true_struct,
+        &mut y_pred_struct,
+        beta,
+        average,
+        sample_weight,
+        zero_division,
+        scheme,
+        suffix,
+        delimiter,
+        parallel,
+        None,
+        strict,
+    )
+}
+
+fn precision_recall_fscore_support_inner<'a, F: FloatExt>(
+    y_true: &'a mut TokenVecs<&'a str>,
+    y_pred: &'a mut TokenVecs<&'a str>,
+    beta: F,
+    average: Average,
+    sample_weight: Option<ArcArray<f32, Dim<[usize; 1]>>>,
+    zero_division: DivByZeroStrat,
+    scheme: SchemeType,
+    suffix: bool,
+    delimiter: char,
+    parallel: bool,
     entities_true_and_pred: Option<(&Entities<'a>, &Entities<'a>)>,
     strict: bool,
 ) -> Result<PrecisionRecallFScoreTrueSum, ComputationError<String>> {
     if entities_true_and_pred.is_none() {
-        check_vecs_empty(&y_true, &y_pred)?;
+        check_vecs_empty(&y_true.tokens, &y_pred.tokens)?;
     }
     if beta.is_sign_negative() {
         return Err(ComputationError::BetaNotPositive);
@@ -695,26 +721,26 @@ pub fn classification_report<'a>(
     strict: bool,
 ) -> Result<Reporter, ComputationError<String>> {
     check_consistent_length(y_true.as_ref(), y_pred.as_ref())?;
-    let y_true_struct = TokenVecs::from(y_true);
-    let y_pred_struct = TokenVecs::from(y_pred);
+    let mut y_true_struct = TokenVecs::from(y_true);
+    let mut y_pred_struct = TokenVecs::from(y_pred);
     let sample_weight_array = sample_weight.map(|x| ArcArray::from_vec(x));
     let entities_true = if strict {
-        Entities::from_tokens_vecs(y_true_struct, scheme, suffix, delimiter)?
+        Entities::try_from_vecs_strict(&mut y_true_struct, scheme, suffix, delimiter)?
     } else {
-        get_entities_lenient(y_true.as_ref(), suffix, delimiter)?
+        get_entities_lenient(&y_true_struct, suffix, delimiter)?
     };
     let entities_pred = if strict {
-        Entities::from_tokens_vecs(y_pred_struct, scheme, suffix, delimiter)?
+        Entities::try_from_vecs_strict(&mut y_pred_struct, scheme, suffix, delimiter)?
     } else {
-        get_entities_lenient(y_pred.as_ref(), suffix, delimiter)?
+        get_entities_lenient(&y_pred_struct, suffix, delimiter)?
     };
     let entities_true_unique_tags = &entities_true.unique_tags();
     let tmp_ahash_set = &entities_pred.unique_tags();
     let unsorted_target_names = tmp_ahash_set | entities_true_unique_tags;
     let target_names_sorted_iter = BTreeSet::from_iter(unsorted_target_names);
-    let (p, r, f1, s) = precision_recall_fscore_support::<f32>(
-        vec![vec![]], // We use the entities_pred/true instead of the vecs of tokens
-        vec![vec![]],
+    let (p, r, f1, s) = precision_recall_fscore_support_inner::<f32>(
+        &mut TokenVecs::default(),
+        &mut TokenVecs::default(),
         1.0,
         Average::None,
         sample_weight_array.clone(), //inexpensive to clone!
@@ -751,9 +777,9 @@ pub fn classification_report<'a>(
     ]
     .into_iter()
     {
-        let (p, r, f1, s) = precision_recall_fscore_support::<f32>(
-            vec![vec![]], // We use the entities_pred/true instead of the vecs of tokens
-            vec![vec![]],
+        let (p, r, f1, s) = precision_recall_fscore_support_inner::<f32>(
+            &mut TokenVecs::default(),
+            &mut TokenVecs::default(),
             1.0,
             avg.into(),
             sample_weight_array.clone(),
@@ -1031,7 +1057,7 @@ PER, 1, 1, 1, 1\n";
         ];
         // predicted sum, true positive sum and true sum
         let (predicted_sum, true_positive_sum, true_sum) =
-            extract_tp_actual_correct_strict(y_true, y_pred, SchemeType::IOB2, false, '-', None)
+            extract_tp_actual_correct_strict(&mut y_true.into(),&mut y_pred.into(), SchemeType::IOB2, false, '-', None)
                 .unwrap();
         dbg!(true_positive_sum.clone());
         let expected = (vec![1, 1], vec![0, 1], vec![1, 1]);
@@ -1054,9 +1080,9 @@ PER, 1, 1, 1, 1\n";
             vec!["O", "O", "B-MISC", "I-MISC", "I-MISC", "I-MISC", "O"],
             vec!["B-PER", "I-PER", "O"],
         ];
-        let (precision, recall, fscore, support) = precision_recall_fscore_support::<f32>(
-            y_true.clone(),
-            y_pred.clone(),
+        let (precision, recall, fscore, support) = precision_recall_fscore_support_inner::<f32>(
+            &mut y_true.clone().into(),
+            &mut y_pred.clone().into(),
             1.0,
             Average::Macro,
             None,
@@ -1078,9 +1104,9 @@ PER, 1, 1, 1, 1\n";
                 support.item().unwrap()
             )
         );
-        let (precision, recall, fscore, support) = precision_recall_fscore_support::<f32>(
-            y_true,
-            y_pred,
+        let (precision, recall, fscore, support) = precision_recall_fscore_support_inner::<f32>(
+            &mut y_true.into(),
+            &mut y_pred.into(),
             1.0,
             Average::Micro,
             None,
@@ -1114,9 +1140,9 @@ PER, 1, 1, 1, 1\n";
             (Average::Weighted, 0.0),
         ];
         for (avg, expected) in test_cases {
-            let (_, _, f1, _) = precision_recall_fscore_support(
-                y_true.clone(),
-                y_pred.clone(),
+            let (_, _, f1, _) = precision_recall_fscore_support_inner(
+                &mut y_true.clone().into(),
+                &mut y_pred.clone().into(),
                 1.0,
                 avg,
                 None,
@@ -1143,9 +1169,9 @@ PER, 1, 1, 1, 1\n";
             vec!["O", "O", "B-MISC", "I-MISC", "I-MISC", "I-MISC", "O"],
             vec!["B-PER", "I-PER", "O"],
         ];
-        let (arr_p, arr_r, arr_f, arr_s) = precision_recall_fscore_support(
-            y_true,
-            y_pred,
+        let (arr_p, arr_r, arr_f, arr_s) = precision_recall_fscore_support_inner(
+            &mut y_true.into(),
+            &mut y_pred.into(),
             1.0,
             Average::Macro,
             None,
@@ -1177,9 +1203,9 @@ PER, 1, 1, 1, 1\n";
             vec!["O", "O", "B-MISC", "I-MISC", "I-MISC", "I-MISC", "O"],
             vec!["B-PER", "I-PER", "O"],
         ];
-        let (arr_p, arr_r, arr_f, arr_s) = precision_recall_fscore_support(
-            y_true,
-            y_pred,
+        let (arr_p, arr_r, arr_f, arr_s) = precision_recall_fscore_support_inner(
+            &mut y_true.into(),
+            &mut y_pred.into(),
             1.0,
             Average::Micro,
             None,
@@ -1212,9 +1238,9 @@ PER, 1, 1, 1, 1\n";
             vec!["O", "O", "B-MISC", "I-MISC", "I-MISC", "I-MISC", "O"],
             vec!["B-PER", "I-PER", "O"],
         ];
-        let (arr_p, arr_r, arr_f, arr_s) = precision_recall_fscore_support(
-            y_true,
-            y_pred,
+        let (arr_p, arr_r, arr_f, arr_s) = precision_recall_fscore_support_inner(
+            &mut y_true.into(),
+            &mut y_pred.into(),
             1.0,
             Average::Weighted,
             None,
@@ -1247,9 +1273,9 @@ PER, 1, 1, 1, 1\n";
             vec!["O", "O", "B-MISC", "I-MISC", "I-MISC", "I-MISC", "O"],
             vec!["B-PER", "I-PER", "O"],
         ];
-        let (arr_p, arr_r, arr_f, arr_s) = precision_recall_fscore_support(
-            y_true,
-            y_pred,
+        let (arr_p, arr_r, arr_f, arr_s) = precision_recall_fscore_support_inner(
+            &mut y_true.into(),
+            &mut y_pred.into(),
             1.0,
             Average::None,
             None,
@@ -1313,9 +1339,9 @@ PER, 1, 1, 1, 1\n";
                 })
                 .collect();
             let beta_pos = -beta.abs();
-            let res = precision_recall_fscore_support(
-                y_true_str,
-                y_pred_str,
+            let res = precision_recall_fscore_support_inner(
+                &mut y_true_str.into(),
+                &mut y_pred_str.into(),
                 beta_pos,
                 average.into(),
                 None,
@@ -1393,9 +1419,9 @@ PER, 1, 1, 1, 1\n";
                 }
             }
             let beta_pos = beta.abs();
-            let res = precision_recall_fscore_support(
-                y_true_str,
-                y_pred_str,
+            let res = precision_recall_fscore_support_inner(
+                &mut y_true_str.into(),
+                &mut y_pred_str.into(),
                 beta_pos,
                 average.into(),
                 None,
@@ -1432,9 +1458,9 @@ PER, 1, 1, 1, 1\n";
     }
     #[test]
     fn test_empty_input() {
-        let res = precision_recall_fscore_support(
-            vec![vec![]],
-            vec![vec![]],
+        let res = precision_recall_fscore_support_inner(
+            &mut TokenVecs::default(),
+            &mut TokenVecs::default(),
             1.0,
             OverallAverage::Macro.into(),
             None,
