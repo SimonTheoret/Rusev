@@ -81,16 +81,6 @@ impl<'a, T> TokenVecs<T> {
     }
 }
 
-/// This method allocates. It should only be used in the testing environment.
-impl<T> From<TokenVecs<T>> for Vec<Vec<T>>
-where
-    T: Clone,
-{
-    fn from(value: TokenVecs<T>) -> Self {
-        value.iter_vec().map(|v| Vec::from(v)).collect()
-    }
-}
-
 pub(crate) struct VecsIter<'a, T>
 where
     T: 'a,
@@ -152,6 +142,17 @@ impl<'a, T> VecsIterMut<'a, T> {
         self.counter += 1;
         self.indice_index += 1;
         self.token_vecs.tokens.get_mut(start..end)
+    }
+}
+
+/// This method allocates. It should only be used in the testing environment.
+#[cfg(test)]
+impl<T> From<TokenVecs<T>> for Vec<Vec<T>>
+where
+    T: Clone,
+{
+    fn from(value: TokenVecs<T>) -> Self {
+        value.iter_vec().map(|v| Vec::from(v)).collect()
     }
 }
 
