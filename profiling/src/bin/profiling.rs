@@ -108,7 +108,6 @@ fn main() {
                 rusev::DivByZeroStrat::ReplaceBy0,
                 rusev::SchemeType::IOB2,
                 false,
-                '-',
                 true,
                 true,
             )

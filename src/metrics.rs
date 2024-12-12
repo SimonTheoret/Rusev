@@ -229,14 +229,13 @@ fn extract_tp_actual_correct_strict<'a>(
     y_pred: &'a mut TokenVecs<&'a str>,
     scheme: SchemeType,
     suffix: bool,
-    delimiter: char,
     entities_true_and_pred: Option<(&Entities<'a>, &Entities<'a>)>,
 ) -> Result<ActualTPCorrect<usize>, ComputationError<String>> {
     let (entities_true_res, entities_pred_res) = match entities_true_and_pred {
         Some((e1, e2)) => (e1, e2),
         None => (
-            &Entities::try_from_vecs_strict(y_true, scheme, suffix, delimiter)?,
-            &Entities::try_from_vecs_strict(y_pred, scheme, suffix, delimiter)?,
+            &Entities::try_from_vecs_strict(y_true, scheme, suffix)?,
+            &Entities::try_from_vecs_strict(y_pred, scheme, suffix)?,
         ),
     };
     let entities_pred_unique_tags = entities_pred_res.unique_tags();
@@ -271,14 +270,13 @@ fn extract_tp_actual_correct_lenient<'a>(
     y_pred: &'a TokenVecs<&'a str>,
     _scheme: SchemeType,
     suffix: bool,
-    delimiter: char,
     entities_true_and_pred: Option<(&Entities<'a>, &Entities<'a>)>,
 ) -> Result<ActualTPCorrect<usize>, ComputationError<String>> {
     let (entities_true_tmp, entities_pred_tmp) = match entities_true_and_pred {
         Some((e1, e2)) => (e1, e2),
         None => (
-            &get_entities_lenient(y_true, suffix, delimiter)?,
-            &get_entities_lenient(y_pred, suffix, delimiter)?,
+            &get_entities_lenient(y_true, suffix)?,
+            &get_entities_lenient(y_pred, suffix)?,
         ),
     };
     let mut entities_true_init: AHashMap<&str, AHashSet<(usize, usize)>> = AHashMap::default();
@@ -297,7 +295,7 @@ fn extract_tp_actual_correct_lenient<'a>(
     }
     // let entities_pred_tmp = match entities_pred {
     //     Some(v) => v,
-    //     None => &get_entities_lenient(y_pred.as_ref(), suffix, delimiter)?,
+    //     None => &get_entities_lenient(y_pred.as_ref(), suffix,  )?,
     // };
     let mut entities_pred_init: AHashMap<&str, AHashSet<(usize, usize)>> = AHashMap::default();
     for e in entities_pred_tmp.iter() {
@@ -463,7 +461,7 @@ type PrecisionRecallFScoreTrueSum = (
 /// * `zero_division`: What to do in case of division by zero.
 /// * `scheme`: What scheme are we using?
 /// * `suffix`: What char to use as suffix?
-/// * `delimiter`: What delimiter are we using to differentiate the prefix from
+/// * ` `: What   are we using to differentiate the prefix from
 ///   the rest of the tag.
 /// * `parallel`: Can we use multiple cores for computations?
 /// * `entities_true`: Optional entities used to reduce the computation load.
@@ -478,7 +476,6 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
     zero_division: DivByZeroStrat,
     scheme: SchemeType,
     suffix: bool,
-    delimiter: char,
     parallel: bool,
     strict: bool,
 ) -> Result<PrecisionRecallFScoreTrueSum, ComputationError<String>> {
@@ -493,7 +490,6 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
         zero_division,
         scheme,
         suffix,
-        delimiter,
         parallel,
         None,
         strict,
@@ -509,7 +505,6 @@ fn precision_recall_fscore_support_inner<'a, F: FloatExt>(
     zero_division: DivByZeroStrat,
     scheme: SchemeType,
     suffix: bool,
-    delimiter: char,
     parallel: bool,
     entities_true_and_pred: Option<(&Entities<'a>, &Entities<'a>)>,
     strict: bool,
@@ -521,23 +516,9 @@ fn precision_recall_fscore_support_inner<'a, F: FloatExt>(
         return Err(ComputationError::BetaNotPositive);
     };
     let (mut pred_sum, mut tp_sum, mut true_sum) = if strict {
-        extract_tp_actual_correct_strict(
-            y_true,
-            y_pred,
-            scheme,
-            suffix,
-            delimiter,
-            entities_true_and_pred,
-        )?
+        extract_tp_actual_correct_strict(y_true, y_pred, scheme, suffix, entities_true_and_pred)?
     } else {
-        extract_tp_actual_correct_lenient(
-            y_true,
-            y_pred,
-            scheme,
-            suffix,
-            delimiter,
-            entities_true_and_pred,
-        )?
+        extract_tp_actual_correct_lenient(y_true, y_pred, scheme, suffix, entities_true_and_pred)?
     };
     let beta2 = beta.powi(2);
     if matches!(average, Average::Micro) {
@@ -706,8 +687,8 @@ fn par_replace<Data: PartialEq + Send + Sync + Copy, D: Dimension>(
 /// * `zero_division`: What to do in case of division by zero.
 /// * `scheme`: What scheme are we using?
 /// * `suffix`: What char to use as suffix?
-/// * `delimiter`: What delimiter are we using to differentiate the prefix from
-///   the rest of the tag? The most common delimiter is `-`.
+/// * ` `: What   are we using to differentiate the prefix from
+///   the rest of the tag? The most common   is `-`.
 /// * `parallel`: Can we use multiple cores for matrix computations?
 pub fn classification_report<'a>(
     y_true: Vec<Vec<&'a str>>,
@@ -716,7 +697,6 @@ pub fn classification_report<'a>(
     zero_division: DivByZeroStrat,
     scheme: SchemeType,
     suffix: bool,
-    delimiter: char,
     parallel: bool,
     strict: bool,
 ) -> Result<Reporter, ComputationError<String>> {
@@ -725,14 +705,14 @@ pub fn classification_report<'a>(
     let mut y_pred_struct = TokenVecs::from(y_pred);
     let sample_weight_array = sample_weight.map(|x| ArcArray::from_vec(x));
     let entities_true = if strict {
-        Entities::try_from_vecs_strict(&mut y_true_struct, scheme, suffix, delimiter)?
+        Entities::try_from_vecs_strict(&mut y_true_struct, scheme, suffix)?
     } else {
-        get_entities_lenient(&y_true_struct, suffix, delimiter)?
+        get_entities_lenient(&y_true_struct, suffix)?
     };
     let entities_pred = if strict {
-        Entities::try_from_vecs_strict(&mut y_pred_struct, scheme, suffix, delimiter)?
+        Entities::try_from_vecs_strict(&mut y_pred_struct, scheme, suffix)?
     } else {
-        get_entities_lenient(&y_pred_struct, suffix, delimiter)?
+        get_entities_lenient(&y_pred_struct, suffix)?
     };
     let entities_true_unique_tags = &entities_true.unique_tags();
     let tmp_ahash_set = &entities_pred.unique_tags();
@@ -747,7 +727,6 @@ pub fn classification_report<'a>(
         zero_division,
         scheme,
         suffix,
-        delimiter,
         parallel,
         Some((&entities_true, &entities_pred)),
         strict,
@@ -786,7 +765,6 @@ pub fn classification_report<'a>(
             zero_division,
             scheme,
             suffix,
-            delimiter,
             parallel,
             Some((&entities_true, &entities_pred)),
             strict,
@@ -846,7 +824,6 @@ mod tests {
             DivByZeroStrat::ReplaceBy0,
             SchemeType::IOB2,
             false,
-            '-',
             false,
             true,
         )
@@ -964,7 +941,6 @@ mod tests {
                 DivByZeroStrat::ReplaceBy1,
                 SchemeType::IOB2,
                 false,
-                '-',
                 true,
                 true,
             );
@@ -990,7 +966,6 @@ mod tests {
             DivByZeroStrat::ReplaceBy0,
             SchemeType::IOB2,
             false,
-            '-',
             true,
             true,
         );
@@ -1056,9 +1031,14 @@ PER, 1, 1, 1, 1\n";
             vec!["B-PER", "I-PER", "O"],
         ];
         // predicted sum, true positive sum and true sum
-        let (predicted_sum, true_positive_sum, true_sum) =
-            extract_tp_actual_correct_strict(&mut y_true.into(),&mut y_pred.into(), SchemeType::IOB2, false, '-', None)
-                .unwrap();
+        let (predicted_sum, true_positive_sum, true_sum) = extract_tp_actual_correct_strict(
+            &mut y_true.into(),
+            &mut y_pred.into(),
+            SchemeType::IOB2,
+            false,
+            None,
+        )
+        .unwrap();
         dbg!(true_positive_sum.clone());
         let expected = (vec![1, 1], vec![0, 1], vec![1, 1]);
         assert_eq!(
@@ -1089,7 +1069,6 @@ PER, 1, 1, 1, 1\n";
             DivByZeroStrat::ReplaceBy0,
             SchemeType::IOB2,
             false,
-            '-',
             true,
             None,
             true,
@@ -1113,7 +1092,6 @@ PER, 1, 1, 1, 1\n";
             DivByZeroStrat::ReplaceBy0,
             SchemeType::IOB2,
             false,
-            '-',
             true,
             None,
             true,
@@ -1149,7 +1127,6 @@ PER, 1, 1, 1, 1\n";
                 DivByZeroStrat::ReplaceBy0,
                 SchemeType::IOB2,
                 false,
-                '-',
                 true,
                 None,
                 true,
@@ -1178,7 +1155,6 @@ PER, 1, 1, 1, 1\n";
             DivByZeroStrat::ReplaceBy0,
             SchemeType::IOB2,
             false,
-            '-',
             true,
             None,
             false,
@@ -1212,7 +1188,6 @@ PER, 1, 1, 1, 1\n";
             DivByZeroStrat::ReplaceBy0,
             SchemeType::IOB2,
             false,
-            '-',
             true,
             None,
             false,
@@ -1247,7 +1222,6 @@ PER, 1, 1, 1, 1\n";
             DivByZeroStrat::ReplaceBy0,
             SchemeType::IOB2,
             false,
-            '-',
             true,
             None,
             false,
@@ -1282,7 +1256,6 @@ PER, 1, 1, 1, 1\n";
             DivByZeroStrat::ReplaceBy0,
             SchemeType::IOB2,
             false,
-            '-',
             true,
             None,
             false,
@@ -1348,7 +1321,6 @@ PER, 1, 1, 1, 1\n";
                 DivByZeroStrat::ReplaceBy0,
                 SchemeType::IOB2,
                 false,
-                '-',
                 parallel,
                 None,
                 strict,
@@ -1428,7 +1400,6 @@ PER, 1, 1, 1, 1\n";
                 DivByZeroStrat::ReplaceBy0,
                 SchemeType::IOB2,
                 false,
-                '-',
                 parallel,
                 None,
                 strict,
@@ -1467,7 +1438,6 @@ PER, 1, 1, 1, 1\n";
             DivByZeroStrat::ReplaceBy0,
             SchemeType::IOB2,
             false,
-            '-',
             false,
             None,
             false,

@@ -92,7 +92,6 @@ impl Error for AutoDetectError {}
 /// auto-detecting the scheme.
 struct AutoDetectConfig<'a> {
     tokens: &'a [Vec<&'a str>],
-    delimiter: char,
     suffix: bool,
 }
 
@@ -115,11 +114,10 @@ impl SchemeType {
     fn try_auto_detect_by_prefix(config: &AutoDetectConfig) -> Option<SchemeType> {
         let sequences = config.tokens;
         let suffix = config.suffix;
-        let delimiter = config.delimiter;
         let mut prefixes: AHashSet<UserPrefix> = AHashSet::default();
         for tokens in sequences {
             for token in tokens {
-                let tok = InnerToken::try_new(Cow::from(*token), suffix, delimiter);
+                let tok = InnerToken::try_new(Cow::from(*token), suffix, );
                 match tok {
                     Ok(p) => prefixes.insert(p.prefix),
                     Err(_) => continue,
@@ -148,7 +146,6 @@ mod test {
         let inputs = vec![build_str_vec_diff(), build_str_vec()];
         let config = AutoDetectConfig {
             tokens: &inputs,
-            delimiter: '-',
             suffix: false,
         };
         let actual = SchemeType::try_auto_detect_by_prefix(&config).unwrap();

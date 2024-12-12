@@ -244,7 +244,6 @@ impl<'a> InnerToken<'a> {
     pub(super) fn try_new(
         token: Cow<'a, str>,
         suffix: bool,
-        _delimiter: char,
     ) -> Result<Self, ParsingError<String>> {
         let prefix_index_struct = PrefixCharIndex::try_new(suffix, &token)?;
         let prefix_char_index = prefix_index_struct.to_index();
@@ -608,7 +607,7 @@ mod test {
             };
             let token = Cow::from(token_string);
             dbg!(token.clone());
-            let inner_token_res = InnerToken::try_new(token, suffix, delimiter);
+            let inner_token_res = InnerToken::try_new(token, suffix, );
             match inner_token_res {
                 Err(err) => match err {
                     ParsingError::PrefixError(s) => panic!("{}", ParsingError::PrefixError(s)),
@@ -648,7 +647,7 @@ mod test {
             };
             let token = Cow::from(token_string);
             dbg!(token.clone());
-            let inner_token_res = InnerToken::try_new(token, suffix, delimiter);
+            let inner_token_res = InnerToken::try_new(token, suffix, );
             match inner_token_res {
                 Err(err) => match err {
                     ParsingError::PrefixError(s) => panic!("{}", ParsingError::PrefixError(s)),
@@ -674,8 +673,7 @@ mod test {
     fn test_empty_token_return_err() {
         let token = Cow::from("");
         let suffix = true;
-        let delimiter = '-';
-        let res = InnerToken::try_new(token, suffix, delimiter).is_err();
+        let res = InnerToken::try_new(token, suffix, ).is_err();
         assert!(res);
     }
 
@@ -688,9 +686,8 @@ mod test {
             (Cow::from("O"), Cow::from("O"), UserPrefix::O),
         ];
         let suffix = true;
-        let delimiter = '-';
         for (i, (token, tag, prefix)) in tokens.into_iter().enumerate() {
-            let inner_token = InnerToken::try_new(token.clone(), suffix, delimiter).unwrap();
+            let inner_token = InnerToken::try_new(token.clone(), suffix, ).unwrap();
             let expected_inner_token = InnerToken { token, prefix, tag };
             dbg!(i);
             assert_eq!(inner_token, expected_inner_token)
@@ -705,9 +702,8 @@ mod test {
             (Cow::from("O"), Cow::from("_"), UserPrefix::O),
         ];
         let suffix = false;
-        let delimiter = '-';
         for (i, (token, tag, prefix)) in tokens.into_iter().enumerate() {
-            let inner_token = InnerToken::try_new(token.clone(), suffix, delimiter).unwrap();
+            let inner_token = InnerToken::try_new(token.clone(), suffix, ).unwrap();
             let expected_inner_token = InnerToken { token, prefix, tag };
             dbg!(i);
             assert_eq!(inner_token, expected_inner_token)
