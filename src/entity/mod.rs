@@ -1,8 +1,9 @@
+use crate::datastructure::TokenVecs;
 use crate::entity::schemes::{InnerToken, Token, UserPrefix};
 use ahash::AHashSet;
 use std::{
     borrow::{Borrow, Cow},
-    cell::RefCell,
+    cell::{RefCell, UnsafeCell},
     cmp::Ordering,
     error::Error,
     fmt::{Debug, Display},
@@ -13,7 +14,6 @@ use std::{
 
 mod autodetect;
 mod schemes;
-mod datastructure;
 
 // Re-exporting
 pub use schemes::{InvalidToken, ParsingError, SchemeType};
@@ -41,18 +41,26 @@ impl<'a> Display for Entity<'a> {
 }
 
 /// Leniently retrieves the entities from a sequence.
+#[inline(always)]
 pub(crate) fn get_entities_lenient<'a>(
-    sequence: &'a [Vec<&'a str>],
+    sequence: &'a TokenVecs<&'a str>,
     suffix: bool,
     delimiter: char,
 ) -> Result<Entities<'a>, ParsingError<String>> {
-    let mut res = vec![];
-    for vec_of_chunks in sequence.iter() {
-        let vec_of_entities: Result<Vec<_>, _> =
-            LenientChunkIter::new(vec_of_chunks, suffix, delimiter).collect();
-        res.push(vec_of_entities?)
+    let mut res = Vec::with_capacity(sequence.len() / 2 as usize);
+    let mut indices = Vec::with_capacity(sequence.len() / 2 as usize);
+    indices.push(0);
+    for vec_of_chunks in sequence.iter_vec() {
+        let chunk_iter = LenientChunkIter::new(vec_of_chunks, suffix, delimiter);
+        indices.push(vec_of_chunks.len());
+        for entity in chunk_iter {
+            res.push(entity?);
+        }
     }
-    Ok(Entities(res))
+    Ok(Entities(TokenVecs {
+        tokens: res.into_boxed_slice(),
+        indices: indices.into(),
+    }))
 }
 
 /// This wrapper around the content iterator appends a single `"O"` at the end of its inner
@@ -212,7 +220,7 @@ impl<'a> LenientChunkIter<'a> {
 /// iteration, it returns as last token the `'O'` tag.
 struct ExtendedTokensIterator<'a> {
     outside_token: Token<'a>,
-    tokens: Vec<Cow<'a, str>>,
+    tokens: &'a mut [&'a str],
     scheme: SchemeType,
     suffix: bool,
     delimiter: char,
@@ -228,7 +236,8 @@ impl<'a> Iterator for ExtendedTokensIterator<'a> {
             Ordering::Greater => None,
             Ordering::Equal => Some(Ok(take(&mut self.outside_token))),
             Ordering::Less => {
-                let cow_str = unsafe { take(self.tokens.get_unchecked_mut(self.index)) };
+                let str = unsafe { take(self.tokens.get_unchecked_mut(self.index)) };
+                let cow_str = Cow::from(str);
                 let inner_token = InnerToken::try_new(cow_str, self.suffix, self.delimiter);
                 match inner_token {
                     Err(msg) => Some(Err(msg)),
@@ -243,7 +252,7 @@ impl<'a> Iterator for ExtendedTokensIterator<'a> {
 impl<'a> ExtendedTokensIterator<'a> {
     fn new(
         outside_token: Token<'a>,
-        tokens: Vec<Cow<'a, str>>,
+        tokens: &'a mut [&'a str],
         scheme: SchemeType,
         suffix: bool,
         delimiter: char,
@@ -270,7 +279,7 @@ struct Tokens<'a> {
 }
 impl<'a> Tokens<'a> {
     fn new(
-        tokens: Vec<Cow<'a, str>>,
+        tokens: &'a mut [&'a str],
         scheme: SchemeType,
         suffix: bool,
         delimiter: char,
@@ -503,10 +512,10 @@ impl<S: AsRef<str> + Debug> Error for ConversionError<S> {}
 #[derive(Debug, PartialEq, Clone)]
 /// Entites are the unique tokens contained in a sequence. Entities can be built with the
 /// TryFromVec trait. This trait allows to collect from a vec
-pub struct Entities<'a>(Vec<Vec<Entity<'a>>>);
+pub(crate) struct Entities<'a>(TokenVecs<Entity<'a>>);
 
 impl<'a> Deref for Entities<'a> {
-    type Target = Vec<Vec<Entity<'a>>>;
+    type Target = TokenVecs<Entity<'a>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -518,11 +527,9 @@ impl<'a> DerefMut for Entities<'a> {
     }
 }
 
-impl<'a> IntoIterator for Entities<'a> {
-    type Item = Entity<'a>;
-    type IntoIter = std::iter::Flatten<std::vec::IntoIter<Vec<Entity<'a>>>>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter().flatten()
+impl<'a> Entities<'a> {
+    fn iter(&'a self) -> Iter<'a, Entity<'a>> {
+        self.0.iter()
     }
 }
 
@@ -538,44 +545,56 @@ impl<'a> IntoIterator for Entities<'a> {
 ///    end of the token.
 /// * `delimiter`: The character used separate the Tag from the Prefix
 ///    (ex: `I-PER`, where the tag is `PER` and the prefix is `I`)
-pub(crate) trait TryFromVecStrict<'a, T: Into<&'a str>> {
+pub(crate) trait TryFromVecStrict<'a> {
     type Error: Error;
     fn try_from_vecs_strict(
-        tokens: Vec<Vec<T>>,
+        tokens: &'a mut TokenVecs<&'a str>,
         scheme: SchemeType,
         suffix: bool,
         delimiter: char,
     ) -> Result<Entities<'a>, Self::Error>;
 }
 
-impl<'a, T: Into<&'a str>> TryFromVecStrict<'a, T> for Entities<'a> {
+impl<'a> TryFromVecStrict<'a> for Entities<'a> {
     type Error = ConversionError<String>;
     #[inline(always)]
     fn try_from_vecs_strict(
-        vec_of_tokens_2d: Vec<Vec<T>>,
+        vec_of_tokens_2d: &'a mut TokenVecs<&'a str>,
         scheme: SchemeType,
         suffix: bool,
         delimiter: char,
     ) -> Result<Entities<'a>, Self::Error> {
-        let vec_of_tokens: Result<Vec<_>, ParsingError<String>> = vec_of_tokens_2d
-            .into_iter()
-            .map(|v| v.into_iter().map(|x| Cow::from(x.into())).collect())
-            .map(|v| Tokens::new(v, scheme, suffix, delimiter))
-            .collect();
-        let entities: Result<Vec<Vec<Entity>>, InvalidToken> = match vec_of_tokens {
-            Ok(vec_of_toks) => vec_of_toks
-                .into_iter()
-                .map(|t| EntitiesIter::new(t).collect())
-                .collect(),
-            Err(msg) => Err(ConversionError::from(msg))?,
+        let len = vec_of_tokens_2d.len();
+        let mut tokens = Vec::with_capacity(len);
+        let mut_iter = UnsafeCell::new(vec_of_tokens_2d.iter_vec_mut());
+        _ = loop {
+            let current = unsafe { &mut *mut_iter.get() };
+            let current_next = current.custom_next();
+            if let None = current_next {
+                let res: Result<Vec<Vec<Entity>>, _> = tokens
+                    .into_iter()
+                    .map(|t| EntitiesIter::new(t).collect())
+                    .collect();
+                match res {
+                    Ok(vec_of_vecs) => {
+                        let tok = TokenVecs::from(vec_of_vecs);
+                        return Ok(Entities::new(tok));
+                    }
+                    Err(e) => return Err(e.into()),
+                }
+            } else {
+                match Tokens::new(current_next.unwrap(), scheme, suffix, delimiter) {
+                    Ok(t) => tokens.push(t),
+                    Err(e) => Err(e)?,
+                }
+            }
         };
-        Ok(Entities::new(entities?))
     }
 }
 
 impl<'a> Entities<'a> {
     /// Consumes the 2D array of vecs and builds the Entities.
-    pub(crate) fn new(entities: Vec<Vec<Entity<'a>>>) -> Self {
+    pub(crate) fn new(entities: TokenVecs<Entity<'a>>) -> Self {
         Entities(entities)
     }
 
@@ -583,16 +602,11 @@ impl<'a> Entities<'a> {
     #[inline(always)]
     /// Filters the entities for a given tag name and returns them in a HashSet.
     ///
-    /// * `tag_name`: This variable is used to compare the tag of the
-    ///   entity with. Only those whose tag is equal to a reference to
-    ///   `tag_name` are added into the returned HashSet.
+    /// * `tag_name`: This variable is used to compare the tag of the entity with. Only those whose
+    /// tag is equal to a reference to `tag_name` are added into the returned HashSet.
     pub fn filter<S: AsRef<str>>(&self, tag_name: S) -> AHashSet<&Entity> {
         let tag_name_ref = tag_name.as_ref();
-        AHashSet::from_iter(
-            self.iter()
-                .flat_map(|v| v.iter())
-                .filter(|e| e.tag == tag_name_ref),
-        )
+        AHashSet::from_iter(self.iter().filter(|e| e.tag == tag_name_ref))
     }
 
     /// Filters the entities for a given tag name and return the number of entities..
@@ -602,14 +616,11 @@ impl<'a> Entities<'a> {
     ///   `tag_name` are added into the returned HashSet.
     pub fn filter_count<S: AsRef<str>>(&self, tag_name: S) -> usize {
         let tag_name_ref = tag_name.as_ref();
-        self.iter()
-            .flat_map(|v| v.iter())
-            .filter(|e| e.tag == tag_name_ref)
-            .count()
+        self.iter().filter(|e| e.tag == tag_name_ref).count()
     }
 
     pub fn unique_tags(&self) -> AHashSet<&str> {
-        AHashSet::from_iter(self.iter().flat_map(|v| v.iter()).map(|e| e.tag.borrow()))
+        AHashSet::from_iter(self.iter().map(|e| e.tag.borrow()))
     }
 }
 
@@ -634,46 +645,45 @@ pub(super) mod tests {
                 "B-GEO", "I-GEO", "O", "B-GEO", "O", "B-PER", "I-PER", "I-PER", "B-LOC",
             ],
         ];
+        let mut vec_of_tokens_2d = TokenVecs::new(vec_of_tokens);
         let entities =
-            Entities::try_from_vecs_strict(vec_of_tokens, SchemeType::IOB2, false, '-').unwrap();
+            Entities::try_from_vecs_strict(&mut vec_of_tokens_2d, SchemeType::IOB2, false, '-')
+                .unwrap();
         assert_eq!(
-            entities.0,
+            entities.tokens,
             vec![
-                vec![
-                    Entity {
-                        start: 0,
-                        end: 2,
-                        tag: Cow::from("PER")
-                    },
-                    Entity {
-                        start: 3,
-                        end: 4,
-                        tag: Cow::from("LOC")
-                    }
-                ],
-                vec![
-                    Entity {
-                        start: 0,
-                        end: 2,
-                        tag: Cow::from("GEO")
-                    },
-                    Entity {
-                        start: 3,
-                        end: 4,
-                        tag: Cow::from("GEO")
-                    },
-                    Entity {
-                        start: 5,
-                        end: 8,
-                        tag: Cow::from("PER")
-                    },
-                    Entity {
-                        start: 8,
-                        end: 9,
-                        tag: Cow::from("LOC")
-                    },
-                ]
+                Entity {
+                    start: 0,
+                    end: 2,
+                    tag: Cow::from("PER")
+                },
+                Entity {
+                    start: 3,
+                    end: 4,
+                    tag: Cow::from("LOC")
+                },
+                Entity {
+                    start: 0,
+                    end: 2,
+                    tag: Cow::from("GEO")
+                },
+                Entity {
+                    start: 3,
+                    end: 4,
+                    tag: Cow::from("GEO")
+                },
+                Entity {
+                    start: 5,
+                    end: 8,
+                    tag: Cow::from("PER")
+                },
+                Entity {
+                    start: 8,
+                    end: 9,
+                    tag: Cow::from("LOC")
+                },
             ]
+            .into_boxed_slice()
         );
     }
 
@@ -709,10 +719,15 @@ pub(super) mod tests {
         fn propertie_entities_try_from_vecs_strict_IO_only(
             tokens: Vec<Vec<TokensToTest>>,
         ) -> TestResult {
-            let tok = tokens;
+            let mut tok = TokenVecs::new(
+                tokens
+                    .into_iter()
+                    .map(|v| v.into_iter().map(|t| t.into()).collect())
+                    .collect(),
+            );
             let entities =
-                Entities::try_from_vecs_strict(tok, SchemeType::IOB2, false, '-').unwrap();
-            for entity in entities {
+                Entities::try_from_vecs_strict(&mut tok, SchemeType::IOB2, false, '-').unwrap();
+            for entity in entities.iter() {
                 let diff = entity.end - entity.start;
                 if diff != 1 {
                     return TestResult::failed();
@@ -729,9 +744,21 @@ pub(super) mod tests {
 
     #[test]
     fn test_entities_filter() {
-        let tokens = build_tokens();
+        let mut tokens = build_tokens_vec_str();
+        let tok_ref = tokens.as_mut_slice();
+        let scheme = SchemeType::IOB2;
+        let delimiter = '-';
+        let suffix = false;
+        let tokens = Tokens::new(tok_ref, scheme, suffix, delimiter).unwrap();
         println!("{:?}", tokens);
-        let entities = build_entities();
+        let mut tokens = build_tokens_vec_str();
+        let tok_ref = tokens.as_mut_slice();
+        let scheme = SchemeType::IOB2;
+        let delimiter = '-';
+        let suffix = false;
+        let tokens = Tokens::new(tok_ref, scheme, suffix, delimiter).unwrap();
+        let entities: Result<Vec<_>, InvalidToken> = EntitiesIter::new(tokens).collect();
+        let entities = entities.unwrap();
         let expected = vec![
             Entity {
                 start: 0,
@@ -747,15 +774,25 @@ pub(super) mod tests {
         assert_eq!(entities, expected);
     }
 
-    fn build_entities() -> Vec<Entity<'static>> {
-        let tokens = build_tokens();
-        let entities: Result<Vec<_>, InvalidToken> = EntitiesIter::new(tokens).collect();
-        entities.unwrap()
-    }
+    // fn build_entities() -> Vec<Entity<'static>> {
+    //     let mut tokens = build_tokens_vec_str();
+    //     let tok_ref = tokens.as_mut_slice();
+    //     let scheme = SchemeType::IOB2;
+    //     let delimiter = '-';
+    //     let suffix = false;
+    //     let tokens = Tokens::new(tok_ref, scheme, suffix, delimiter).unwrap();
+    //     let entities: Result<Vec<_>, InvalidToken> = EntitiesIter::new(tokens).collect();
+    //     entities.unwrap()
+    // }
 
     #[test]
     fn test_entity_iter() {
-        let tokens = build_tokens();
+        let mut tokens = build_tokens_vec_str();
+        let tok_ref = tokens.as_mut_slice();
+        let scheme = SchemeType::IOB2;
+        let delimiter = '-';
+        let suffix = false;
+        let tokens = Tokens::new(tok_ref, scheme, suffix, delimiter).unwrap();
         println!("tokens: {:?}", tokens);
         let iter = EntitiesIter(EntitiesIterAdaptor::new(tokens.clone()));
         let wrapped_entities: Result<Vec<_>, InvalidToken> = iter.collect();
@@ -777,7 +814,12 @@ pub(super) mod tests {
 
     #[test]
     fn test_entity_adaptor_iterator() {
-        let tokens = build_tokens();
+        let mut tokens = build_tokens_vec_str();
+        let tok_ref = tokens.as_mut_slice();
+        let scheme = SchemeType::IOB2;
+        let delimiter = '-';
+        let suffix = false;
+        let tokens = Tokens::new(tok_ref, scheme, suffix, delimiter).unwrap();
         println!("tokens: {:?}", tokens);
         let mut iter = EntitiesIterAdaptor::new(tokens.clone());
         let first_entity = iter.next().unwrap();
@@ -798,7 +840,12 @@ pub(super) mod tests {
 
     #[test]
     fn test_is_start() {
-        let tokens: Tokens = build_tokens();
+        let mut tokens = build_tokens_vec_str();
+        let tok_ref = tokens.as_mut_slice();
+        let scheme = SchemeType::IOB2;
+        let delimiter = '-';
+        let suffix = false;
+        let tokens = Tokens::new(tok_ref, scheme, suffix, delimiter).unwrap();
         dbg!(tokens.clone());
         let first_token = tokens.extended_tokens.first().unwrap();
         let second_token = tokens.extended_tokens.get(1).unwrap();
@@ -808,7 +855,12 @@ pub(super) mod tests {
     }
     #[test]
     fn test_tokens_is_end() {
-        let tokens: Tokens = build_tokens();
+        let mut tokens = build_tokens_vec_str();
+        let tok_ref = tokens.as_mut_slice();
+        let scheme = SchemeType::IOB2;
+        let delimiter = '-';
+        let suffix = false;
+        let tokens = Tokens::new(tok_ref, scheme, suffix, delimiter).unwrap();
         let is_end_of_chunk = tokens.is_end(2);
         dbg!(tokens.clone());
         // let first_non_outside_token = &tokens.extended_tokens.get(1).unwrap();
@@ -820,7 +872,12 @@ pub(super) mod tests {
 
     #[test]
     fn test_innertoken_is_end() {
-        let tokens: Tokens = build_tokens();
+        let mut tokens = build_tokens_vec_str();
+        let tok_ref = tokens.as_mut_slice();
+        let scheme = SchemeType::IOB2;
+        let delimiter = '-';
+        let suffix = false;
+        let tokens = Tokens::new(tok_ref, scheme, suffix, delimiter).unwrap();
         let first_non_outside_token = tokens.extended_tokens.first().unwrap();
         let second_non_outside_token = tokens.extended_tokens.get(1).unwrap();
         let third_non_outside_token = tokens.extended_tokens.get(2).unwrap();
@@ -832,7 +889,12 @@ pub(super) mod tests {
 
     #[test]
     fn test_token_is_start() {
-        let tokens = build_tokens();
+        let mut tokens = build_tokens_vec_str();
+        let tok_ref = tokens.as_mut_slice();
+        let scheme = SchemeType::IOB2;
+        let delimiter = '-';
+        let suffix = false;
+        let tokens = Tokens::new(tok_ref, scheme, suffix, delimiter).unwrap();
         println!("{:?}", tokens);
         println!("{:?}", tokens.extended_tokens());
         let prev = tokens.extended_tokens().first().unwrap();
@@ -845,7 +907,12 @@ pub(super) mod tests {
     }
     #[test]
     fn test_forward_method() {
-        let tokens = build_tokens();
+        let mut tokens = build_tokens_vec_str();
+        let tok_ref = tokens.as_mut_slice();
+        let scheme = SchemeType::IOB2;
+        let delimiter = '-';
+        let suffix = false;
+        let tokens = Tokens::new(tok_ref, scheme, suffix, delimiter).unwrap();
         println!("{:?}", &tokens);
         let end = tokens.forward(1, tokens.extended_tokens.first().unwrap());
         let expected_end = 2;
@@ -853,16 +920,21 @@ pub(super) mod tests {
     }
     #[test]
     fn test_new_tokens() {
-        let tokens = build_tokens();
+        let mut tokens = build_tokens_vec_str();
+        let tok_ref = tokens.as_mut_slice();
+        let scheme = SchemeType::IOB2;
+        let delimiter = '-';
+        let suffix = false;
+        let tokens = Tokens::new(tok_ref, scheme, suffix, delimiter).unwrap();
         println!("{:?}", tokens);
         assert_eq!(tokens.extended_tokens.len(), 5);
     }
 
     #[test]
     fn test_unique_tags() {
-        let sequences = vec![build_str_vec(), build_str_vec_diff()];
+        let mut sequences = TokenVecs::new(vec![build_str_vec(), build_str_vec_diff()]);
         let entities =
-            Entities::try_from_vecs_strict(sequences, SchemeType::IOB2, false, '-').unwrap();
+            Entities::try_from_vecs_strict(&mut sequences, SchemeType::IOB2, false, '-').unwrap();
         let actual_unique_tags = entities.unique_tags();
         let expected_unique_tags: AHashSet<&str> = AHashSet::from_iter(vec!["PER", "LOC", "GEO"]);
         assert_eq!(actual_unique_tags, expected_unique_tags);
@@ -870,13 +942,20 @@ pub(super) mod tests {
 
     #[test]
     fn test_get_entities_lenient() {
-        let seq = vec![vec!["B-PER", "I-PER", "O", "B-LOC"]];
-        let actual = get_entities_lenient(seq.as_ref(), false, '-').unwrap();
-        let entities = vec![vec![
+        let tokens = vec!["B-PER", "I-PER", "O", "B-LOC"];
+        let seq = TokenVecs::new(vec![tokens.clone()]);
+        let actual = get_entities_lenient(&seq, false, '-').unwrap();
+        let entities = vec![
             Entity::new(0, 1, Cow::from("PER")),
             Entity::new(3, 3, Cow::from("LOC")),
-        ]];
-        let expected = Entities::new(entities);
+        ];
+        let expected_tokens = entities.into_boxed_slice();
+        let expected_indices = Box::new([0, tokens.len()]);
+        let expected_inner = TokenVecs {
+            tokens: expected_tokens,
+            indices: expected_indices,
+        };
+        let expected = Entities(expected_inner);
         assert_eq!(actual, expected)
     }
 
@@ -898,14 +977,9 @@ pub(super) mod tests {
         let seq = vec![vec![
             "O", "O", "O", "B-MISC", "I-MISC", "I-MISC", "O", "B-PER", "I-PER",
         ]];
-        let binding = seq.clone();
-        let binding2 = get_entities_lenient(binding.as_ref(), false, '-').unwrap();
-        let actual = binding2
-            .0
-            .iter()
-            .flat_map(|v| v.iter())
-            .map(|e| e.as_tuple())
-            .collect::<Vec<_>>();
+        let binding = &seq.into();
+        let binding2 = get_entities_lenient(binding, false, '-').unwrap();
+        let actual = binding2.0.iter().map(|e| e.as_tuple()).collect::<Vec<_>>();
         let expected: Vec<(usize, usize, &str)> = vec![(3, 5, "MISC"), (7, 8, "PER")];
         assert_eq!(expected, actual)
     }
@@ -915,32 +989,15 @@ pub(super) mod tests {
         let seq = vec![vec![
             "O", "O", "O", "MISC-B", "MISC-I", "MISC-I", "O", "PER-B", "PER-I",
         ]];
-        let binding = seq.clone();
-        let binding2 = get_entities_lenient(binding.as_ref(), true, '-').unwrap();
-        let actual = binding2
-            .0
-            .iter()
-            .flat_map(|v| v.iter())
-            .map(|e| e.as_tuple())
-            .collect::<Vec<_>>();
+        let binding = &seq.into();
+        let binding2 = get_entities_lenient(binding, true, '-').unwrap();
+        let actual = binding2.0.iter().map(|e| e.as_tuple()).collect::<Vec<_>>();
         let expected: Vec<(usize, usize, &str)> = vec![(3, 5, "MISC"), (7, 8, "PER")];
         assert_eq!(expected, actual)
     }
 
-    fn build_tokens() -> Tokens<'static> {
-        let tokens = build_tokens_vec();
-        let scheme = SchemeType::IOB2;
-        let delimiter = '-';
-        let suffix = false;
-        Tokens::new(tokens, scheme, suffix, delimiter).unwrap()
-    }
-    fn build_tokens_vec() -> Vec<Cow<'static, str>> {
-        vec![
-            Cow::from("B-PER"),
-            Cow::from("I-PER"),
-            Cow::from("O"),
-            Cow::from("B-LOC"),
-        ]
+    fn build_tokens_vec_str() -> Vec<&'static str> {
+        vec!["B-PER", "I-PER", "O", "B-LOC"]
     }
 
     fn build_str_vec() -> Vec<&'static str> {
