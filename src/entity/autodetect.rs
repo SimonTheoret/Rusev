@@ -90,16 +90,16 @@ impl Error for AutoDetectError {}
 
 /// Helper structure used to give the necessary information about the structure of the tokens when
 /// auto-detecting the scheme.
-struct AutoDetectConfig<'a> {
+struct AutoDetectScheme<'a> {
     tokens: &'a [Vec<&'a str>],
     suffix: bool,
 }
 
 /// We can try to auto-detect the SchemeType used. This would allow to simplify the interface of
 /// the lib and to simplify the life of the user, who might not know what scheme they are using.
-impl<'a> TryFrom<AutoDetectConfig<'a>> for SchemeType {
+impl<'a> TryFrom<AutoDetectScheme<'a>> for SchemeType {
     type Error = AutoDetectError;
-    fn try_from(value: AutoDetectConfig) -> Result<Self, Self::Error> {
+    fn try_from(value: AutoDetectScheme) -> Result<Self, Self::Error> {
         Self::try_auto_detect_by_prefix(&value).ok_or(AutoDetectError::UnsupportedScheme)
     }
 }
@@ -111,7 +111,7 @@ impl SchemeType {
     /// - IOE2
     /// - IOBES
     /// - BILOU
-    fn try_auto_detect_by_prefix(config: &AutoDetectConfig) -> Option<SchemeType> {
+    fn try_auto_detect_by_prefix(config: &AutoDetectScheme) -> Option<SchemeType> {
         let sequences = config.tokens;
         let suffix = config.suffix;
         let mut prefixes: AHashSet<UserPrefix> = AHashSet::default();
@@ -144,7 +144,7 @@ mod test {
     #[test]
     fn test_auto_detect_scheme_by_prefix() {
         let inputs = vec![build_str_vec_diff(), build_str_vec()];
-        let config = AutoDetectConfig {
+        let config = AutoDetectScheme {
             tokens: &inputs,
             suffix: false,
         };

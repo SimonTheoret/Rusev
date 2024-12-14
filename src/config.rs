@@ -57,6 +57,8 @@ where
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+/// Config struct used to simplify the imputs of parameters to the main functions of `Rusev`. It
+/// implements the default trait.
 pub struct RusevConfig<Samples, ZeroDiv, Scheme>
 where
     Samples: Into<Option<Vec<f32>>>,
@@ -103,6 +105,7 @@ enum LeftOrRight<L, R> {
     Right(R),
 }
 
+/// This builder can be used to build and customize a `RusevConfig` stucture.
 pub struct RusevConfigBuilder<Samples, ZeroDiv, Scheme>
 where
     Samples: Into<Option<Vec<f32>>>,
