@@ -44,7 +44,11 @@ serde-jsonlines = "0.6.0"
 pprof = { version = "0.14.0", features = ["criterion", "flamegraph"] }
 
 [[bench]]
-name = "classification_report"
+name = "classification_report_full"
+harness = false
+
+[[bench]]
+name = "classification_report_fast"
 harness = false
 
 [profile.release]

@@ -177,7 +177,7 @@ impl Display for InconsistentLengthError {
 }
 impl Error for InconsistentLengthError {}
 
-fn check_vecs_empty<T>(y_true: &[T], y_pred: &[T]) -> Result<(), ComputationError<String>> {
+fn check_for_empty_slices<T>(y_true: &[T], y_pred: &[T]) -> Result<(), ComputationError<String>> {
     let y_true_is_empty: bool;
     if y_true.is_empty() {
         y_true_is_empty = true;
@@ -461,8 +461,6 @@ type PrecisionRecallFScoreTrueSum = (
 /// * `zero_division`: What to do in case of division by zero.
 /// * `scheme`: What scheme are we using?
 /// * `suffix`: What char to use as suffix?
-/// * ` `: What   are we using to differentiate the prefix from
-///   the rest of the tag.
 /// * `parallel`: Can we use multiple cores for computations?
 /// * `entities_true`: Optional entities used to reduce the computation load.
 /// * `entities_pred`: Optional entities used to reduce the computation load.
@@ -510,7 +508,7 @@ fn precision_recall_fscore_support_inner<'a, F: FloatExt>(
     strict: bool,
 ) -> Result<PrecisionRecallFScoreTrueSum, ComputationError<String>> {
     if entities_true_and_pred.is_none() {
-        check_vecs_empty(&y_true.tokens, &y_pred.tokens)?;
+        check_for_empty_slices(&y_true.tokens, &y_pred.tokens)?;
     }
     if beta.is_sign_negative() {
         return Err(ComputationError::BetaNotPositive);
