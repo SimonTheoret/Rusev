@@ -50,7 +50,7 @@ pub(crate) fn get_entities_lenient<'a>(
     let mut indices = Vec::with_capacity(sequence.len() / 2 as usize);
     indices.push(0);
     for vec_of_chunks in sequence.iter_vec() {
-        let chunk_iter = LenientChunkIter::new(vec_of_chunks, suffix, );
+        let chunk_iter = LenientChunkIter::new(vec_of_chunks, suffix);
         indices.push(vec_of_chunks.len());
         for entity in chunk_iter {
             res.push(entity?);
@@ -80,6 +80,7 @@ impl<'a> InnerLenientChunkIter<'a> {
 
 impl<'a> Iterator for InnerLenientChunkIter<'a> {
     type Item = &'a str;
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         let next_value = self.content.next();
         if next_value.is_none() {
@@ -110,7 +111,7 @@ struct LenientChunkIter<'a> {
 }
 
 impl<'a> LenientChunkIter<'a> {
-    fn new(sequence: &'a [&'a str], suffix: bool,  ) -> Self {
+    fn new(sequence: &'a [&'a str], suffix: bool) -> Self {
         LenientChunkIter {
             inner: InnerLenientChunkIter::new(sequence),
             prev_type: None,
@@ -124,17 +125,17 @@ impl<'a> LenientChunkIter<'a> {
 
 impl<'a> Iterator for LenientChunkIter<'a> {
     type Item = Result<Entity<'a>, ParsingError<String>>;
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let current_chunk = self.inner.next()?; // no more chunks. We are done
-            let mut inner_token =
-                match InnerToken::try_new(Cow::from(current_chunk), self.suffix) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        self.index += 1;
-                        return Some(Err(e));
-                    }
-                };
+            let mut inner_token = match InnerToken::try_new(Cow::from(current_chunk), self.suffix) {
+                Ok(v) => v,
+                Err(e) => {
+                    self.index += 1;
+                    return Some(Err(e));
+                }
+            };
             let ret: Option<Self::Item>;
             if self.end_of_chunk(&inner_token.prefix, &inner_token.tag) {
                 ret = Some(Ok(Entity::new(
@@ -160,6 +161,7 @@ impl<'a> LenientChunkIter<'a> {
     //     tag -> prefix
     //     type -> classe
     ///     """Checks if a chunk ended between the previous and current word.
+    #[inline(always)]
     fn end_of_chunk(&self, current_prefix: &UserPrefix, current_type: &Cow<'a, str>) -> bool {
         let wrapped_type = Some(current_type);
         // Cloning a prefix is very inexpensive
@@ -185,6 +187,7 @@ impl<'a> LenientChunkIter<'a> {
     }
 
     ///     """Checks if a chunk started between the previous and current word.
+    #[inline(always)]
     fn start_of_chunk(&self, current_prefix: &UserPrefix, current_type: &Cow<'a, str>) -> bool {
         let wrapped_type = Some(current_type);
         match (self.prev_prefix.clone(), current_prefix) {
@@ -234,7 +237,7 @@ impl<'a> Iterator for ExtendedTokensIterator<'a> {
             Ordering::Less => {
                 let str = unsafe { take(self.tokens.get_unchecked_mut(self.index)) };
                 let cow_str = Cow::from(str);
-                let inner_token = InnerToken::try_new(cow_str, self.suffix, );
+                let inner_token = InnerToken::try_new(cow_str, self.suffix);
                 match inner_token {
                     Err(msg) => Some(Err(msg)),
                     Ok(res) => Some(Ok(Token::new(self.scheme, res))),
@@ -272,15 +275,15 @@ struct Tokens<'a> {
     extended_tokens: Vec<Token<'a>>,
 }
 impl<'a> Tokens<'a> {
+    #[inline(always)]
     fn new(
         tokens: &'a mut [&'a str],
         scheme: SchemeType,
         suffix: bool,
     ) -> Result<Self, ParsingError<String>> {
-        let outside_token_inner = InnerToken::try_new(Cow::Borrowed("O"), suffix,  )?;
+        let outside_token_inner = InnerToken::try_new(Cow::Borrowed("O"), suffix)?;
         let outside_token = Token::new(scheme, outside_token_inner);
-        let tokens_iter =
-            ExtendedTokensIterator::new(outside_token, tokens, scheme, suffix,  );
+        let tokens_iter = ExtendedTokensIterator::new(outside_token, tokens, scheme, suffix);
         let extended_tokens: Result<Vec<Token>, ParsingError<String>> = tokens_iter.collect();
         match extended_tokens {
             Err(prefix_error) => Err(prefix_error),
@@ -296,6 +299,7 @@ impl<'a> Tokens<'a> {
     /// * `start`: Indexing at which we are starting to look for a token not inside.
     /// * `prev`: Previous token. This token is necessary to know if the token at index `start` is
     ///    inside or not.
+    #[inline(always)]
     fn forward(&self, start: usize, prev: &Token<'a>) -> usize {
         let slice_of_interest = &self.extended_tokens()[start..];
         let mut swap_token = prev;
@@ -314,12 +318,14 @@ impl<'a> Tokens<'a> {
     /// chunk at all. Else, it returns false
     ///
     /// * `i`: Index of the token.
+    #[inline(always)]
     fn is_end(&self, i: usize) -> bool {
         let token = &self.extended_tokens()[i];
         let prev = &self.extended_tokens()[i - 1];
         token.is_end(prev.inner())
     }
 
+    #[inline(always)]
     fn extended_tokens(&'a self) -> &'a Vec<Token<'a>> {
         let res: &Vec<Token> = self.extended_tokens.as_ref();
         res
@@ -405,6 +411,7 @@ where
     ///    extracted from its extended_tokens field.
     /// * `index`: Index specifying the current token. `index-1` is
     ///    used to take the previous token if index!=1.
+    #[inline(always)]
     unsafe fn take_out_pair(
         tokens: &'b mut Tokens<'a>,
         index: usize,
@@ -437,6 +444,7 @@ struct EntitiesIter<'a>(EntitiesIterAdaptor<'a>);
 
 impl<'a> Iterator for EntitiesIter<'a> {
     type Item = Result<Entity<'a>, InvalidToken>;
+    #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         let mut res: Option<Option<Result<Entity<'a>, InvalidToken>>> = self.0.next();
         // Removes the Some(None) cases
@@ -574,7 +582,7 @@ impl<'a> TryFromVecStrict<'a> for Entities<'a> {
                     Err(e) => return Err(e.into()),
                 }
             } else {
-                match Tokens::new(current_next.unwrap(), scheme, suffix ) {
+                match Tokens::new(current_next.unwrap(), scheme, suffix) {
                     Ok(t) => tokens.push(t),
                     Err(e) => Err(e)?,
                 }
@@ -638,8 +646,7 @@ pub(super) mod tests {
         ];
         let mut vec_of_tokens_2d = TokenVecs::new(vec_of_tokens);
         let entities =
-            Entities::try_from_vecs_strict(&mut vec_of_tokens_2d, SchemeType::IOB2, false,  )
-                .unwrap();
+            Entities::try_from_vecs_strict(&mut vec_of_tokens_2d, SchemeType::IOB2, false).unwrap();
         assert_eq!(
             entities.tokens,
             vec![
@@ -717,7 +724,7 @@ pub(super) mod tests {
                     .collect(),
             );
             let entities =
-                Entities::try_from_vecs_strict(&mut tok, SchemeType::IOB2, false,  ).unwrap();
+                Entities::try_from_vecs_strict(&mut tok, SchemeType::IOB2, false).unwrap();
             for entity in entities.iter() {
                 let diff = entity.end - entity.start;
                 if diff != 1 {
@@ -739,13 +746,13 @@ pub(super) mod tests {
         let tok_ref = tokens.as_mut_slice();
         let scheme = SchemeType::IOB2;
         let suffix = false;
-        let tokens = Tokens::new(tok_ref, scheme, suffix,  ).unwrap();
+        let tokens = Tokens::new(tok_ref, scheme, suffix).unwrap();
         println!("{:?}", tokens);
         let mut tokens = build_tokens_vec_str();
         let tok_ref = tokens.as_mut_slice();
         let scheme = SchemeType::IOB2;
         let suffix = false;
-        let tokens = Tokens::new(tok_ref, scheme, suffix,  ).unwrap();
+        let tokens = Tokens::new(tok_ref, scheme, suffix).unwrap();
         let entities: Result<Vec<_>, InvalidToken> = EntitiesIter::new(tokens).collect();
         let entities = entities.unwrap();
         let expected = vec![
@@ -780,7 +787,7 @@ pub(super) mod tests {
         let tok_ref = tokens.as_mut_slice();
         let scheme = SchemeType::IOB2;
         let suffix = false;
-        let tokens = Tokens::new(tok_ref, scheme, suffix,  ).unwrap();
+        let tokens = Tokens::new(tok_ref, scheme, suffix).unwrap();
         println!("tokens: {:?}", tokens);
         let iter = EntitiesIter(EntitiesIterAdaptor::new(tokens.clone()));
         let wrapped_entities: Result<Vec<_>, InvalidToken> = iter.collect();
@@ -806,7 +813,7 @@ pub(super) mod tests {
         let tok_ref = tokens.as_mut_slice();
         let scheme = SchemeType::IOB2;
         let suffix = false;
-        let tokens = Tokens::new(tok_ref, scheme, suffix,  ).unwrap();
+        let tokens = Tokens::new(tok_ref, scheme, suffix).unwrap();
         println!("tokens: {:?}", tokens);
         let mut iter = EntitiesIterAdaptor::new(tokens.clone());
         let first_entity = iter.next().unwrap();
@@ -831,7 +838,7 @@ pub(super) mod tests {
         let tok_ref = tokens.as_mut_slice();
         let scheme = SchemeType::IOB2;
         let suffix = false;
-        let tokens = Tokens::new(tok_ref, scheme, suffix,  ).unwrap();
+        let tokens = Tokens::new(tok_ref, scheme, suffix).unwrap();
         dbg!(tokens.clone());
         let first_token = tokens.extended_tokens.first().unwrap();
         let second_token = tokens.extended_tokens.get(1).unwrap();
@@ -845,7 +852,7 @@ pub(super) mod tests {
         let tok_ref = tokens.as_mut_slice();
         let scheme = SchemeType::IOB2;
         let suffix = false;
-        let tokens = Tokens::new(tok_ref, scheme, suffix,  ).unwrap();
+        let tokens = Tokens::new(tok_ref, scheme, suffix).unwrap();
         let is_end_of_chunk = tokens.is_end(2);
         dbg!(tokens.clone());
         // let first_non_outside_token = &tokens.extended_tokens.get(1).unwrap();
@@ -861,7 +868,7 @@ pub(super) mod tests {
         let tok_ref = tokens.as_mut_slice();
         let scheme = SchemeType::IOB2;
         let suffix = false;
-        let tokens = Tokens::new(tok_ref, scheme, suffix,  ).unwrap();
+        let tokens = Tokens::new(tok_ref, scheme, suffix).unwrap();
         let first_non_outside_token = tokens.extended_tokens.first().unwrap();
         let second_non_outside_token = tokens.extended_tokens.get(1).unwrap();
         let third_non_outside_token = tokens.extended_tokens.get(2).unwrap();
@@ -877,7 +884,7 @@ pub(super) mod tests {
         let tok_ref = tokens.as_mut_slice();
         let scheme = SchemeType::IOB2;
         let suffix = false;
-        let tokens = Tokens::new(tok_ref, scheme, suffix,  ).unwrap();
+        let tokens = Tokens::new(tok_ref, scheme, suffix).unwrap();
         println!("{:?}", tokens);
         println!("{:?}", tokens.extended_tokens());
         let prev = tokens.extended_tokens().first().unwrap();
@@ -894,7 +901,7 @@ pub(super) mod tests {
         let tok_ref = tokens.as_mut_slice();
         let scheme = SchemeType::IOB2;
         let suffix = false;
-        let tokens = Tokens::new(tok_ref, scheme, suffix,  ).unwrap();
+        let tokens = Tokens::new(tok_ref, scheme, suffix).unwrap();
         println!("{:?}", &tokens);
         let end = tokens.forward(1, tokens.extended_tokens.first().unwrap());
         let expected_end = 2;
@@ -906,7 +913,7 @@ pub(super) mod tests {
         let tok_ref = tokens.as_mut_slice();
         let scheme = SchemeType::IOB2;
         let suffix = false;
-        let tokens = Tokens::new(tok_ref, scheme, suffix,  ).unwrap();
+        let tokens = Tokens::new(tok_ref, scheme, suffix).unwrap();
         println!("{:?}", tokens);
         assert_eq!(tokens.extended_tokens.len(), 5);
     }
@@ -915,7 +922,7 @@ pub(super) mod tests {
     fn test_unique_tags() {
         let mut sequences = TokenVecs::new(vec![build_str_vec(), build_str_vec_diff()]);
         let entities =
-            Entities::try_from_vecs_strict(&mut sequences, SchemeType::IOB2, false,  ).unwrap();
+            Entities::try_from_vecs_strict(&mut sequences, SchemeType::IOB2, false).unwrap();
         let actual_unique_tags = entities.unique_tags();
         let expected_unique_tags: AHashSet<&str> = AHashSet::from_iter(vec!["PER", "LOC", "GEO"]);
         assert_eq!(actual_unique_tags, expected_unique_tags);
@@ -925,7 +932,7 @@ pub(super) mod tests {
     fn test_get_entities_lenient() {
         let tokens = vec!["B-PER", "I-PER", "O", "B-LOC"];
         let seq = TokenVecs::new(vec![tokens.clone()]);
-        let actual = get_entities_lenient(&seq, false,  ).unwrap();
+        let actual = get_entities_lenient(&seq, false).unwrap();
         let entities = vec![
             Entity::new(0, 1, Cow::from("PER")),
             Entity::new(3, 3, Cow::from("LOC")),
@@ -944,7 +951,7 @@ pub(super) mod tests {
     #[test]
     fn test_LenientChunkIterator() {
         let tokens = build_str_vec();
-        let iter = LenientChunkIter::new(tokens.as_ref(), false,  );
+        let iter = LenientChunkIter::new(tokens.as_ref(), false);
         let actual = iter.collect::<Vec<_>>();
         let expected: Vec<Result<Entity, ParsingError<String>>> = vec![
             Ok(Entity::new(0, 1, Cow::Borrowed("PER"))),
@@ -959,7 +966,7 @@ pub(super) mod tests {
             "O", "O", "O", "B-MISC", "I-MISC", "I-MISC", "O", "B-PER", "I-PER",
         ]];
         let binding = &seq.into();
-        let binding2 = get_entities_lenient(binding, false,  ).unwrap();
+        let binding2 = get_entities_lenient(binding, false).unwrap();
         let actual = binding2.0.iter().map(|e| e.as_tuple()).collect::<Vec<_>>();
         let expected: Vec<(usize, usize, &str)> = vec![(3, 5, "MISC"), (7, 8, "PER")];
         assert_eq!(expected, actual)
@@ -971,7 +978,7 @@ pub(super) mod tests {
             "O", "O", "O", "MISC-B", "MISC-I", "MISC-I", "O", "PER-B", "PER-I",
         ]];
         let binding = &seq.into();
-        let binding2 = get_entities_lenient(binding, true,  ).unwrap();
+        let binding2 = get_entities_lenient(binding, true).unwrap();
         let actual = binding2.0.iter().map(|e| e.as_tuple()).collect::<Vec<_>>();
         let expected: Vec<(usize, usize, &str)> = vec![(3, 5, "MISC"), (7, 8, "PER")];
         assert_eq!(expected, actual)
