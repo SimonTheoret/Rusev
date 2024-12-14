@@ -9,8 +9,8 @@ pub(crate) struct TokenVecs<T> {
     pub(crate) indices: Box<[usize]>,
 }
 
-impl<'a> TokenVecs<&'a str> {
-    pub(crate) fn new(vecs: Vec<Vec<&'a str>>) -> Self {
+impl<T> TokenVecs<T> {
+    pub(crate) fn new(vecs: Vec<Vec<T>>) -> Self {
         Self::from(vecs)
     }
 }

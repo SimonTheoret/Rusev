@@ -32,14 +32,52 @@ the letters of the scheme, such as I-O-B or I-O-E. Prefix can only be a single a
 //TODO: Add information about the different options, such as `strict`, `parallel`, `zero_division`,
 //`suffix`, `sample_weight`.
 
+mod config;
+mod datastructure;
 mod entity;
 mod metrics;
 mod reporter;
-mod datastructure;
 
 // The public api starts here
 pub use entity::SchemeType;
 
-pub use metrics::{classification_report, ComputationError, DivByZeroStrat, precision_recall_fscore_support};
+pub use metrics::{
+    classification_report, precision_recall_fscore_support, ComputationError, DivByZeroStrat,
+    PrecisionRecallFScoreTrueSum,
+};
 
 pub use reporter::{ClassMetrics, Reporter};
+
+pub use config::{DefaultRusevConfig, RusevConfig};
+
+/// Main entrypoint of the Rusev library. This function computes the precision, recall, fscore and
+/// support of the true and predicted tokens. It returns information about the individual classes
+/// and different overall averages. The returned structure can be used to prettyprint the results
+/// or be converted into a HashSet.
+///
+/// * `y_true`: True tokens
+/// * `y_pred`: Predicted tokens
+/// * `config`: Parameters used to compute the metrics of each classes.
+pub fn classification_report_conf<Samples, ZeroDiv, Scheme>(
+    y_true: Vec<Vec<&str>>,
+    y_pred: Vec<Vec<&str>>,
+    config: RusevConfig<Samples, ZeroDiv, Scheme>,
+) -> Result<Reporter, ComputationError<String>>
+where
+    Samples: Into<Option<Vec<f32>>>,
+    ZeroDiv: Into<DivByZeroStrat>,
+    Scheme: Into<SchemeType>,
+{
+    let (sample_weights, div_by_zero, scheme, suffix, parallel, strict) = config.into();
+    let scheme = scheme.unwrap_or_default();
+    classification_report(
+        y_true,
+        y_pred,
+        sample_weights,
+        div_by_zero,
+        scheme,
+        suffix,
+        parallel,
+        strict,
+    )
+}

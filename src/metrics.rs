@@ -442,7 +442,7 @@ impl<S: AsRef<str> + std::fmt::Debug> From<ArrayNotUniqueOrEmpty> for Computatio
     }
 }
 
-type PrecisionRecallFScoreTrueSum = (
+pub type PrecisionRecallFScoreTrueSum = (
     Array<f32, Dim<[usize; 1]>>,
     Array<f32, Dim<[usize; 1]>>,
     Array<f32, Dim<[usize; 1]>>,
@@ -462,8 +462,6 @@ type PrecisionRecallFScoreTrueSum = (
 /// * `scheme`: What scheme are we using?
 /// * `suffix`: What char to use as suffix?
 /// * `parallel`: Can we use multiple cores for computations?
-/// * `entities_true`: Optional entities used to reduce the computation load.
-/// * `entities_pred`: Optional entities used to reduce the computation load.
 /// * `strict`: Are we using the strict mode.
 pub fn precision_recall_fscore_support<'a, F: FloatExt>(
     y_true: Vec<Vec<&'a str>>,
@@ -675,7 +673,8 @@ fn par_replace<Data: PartialEq + Send + Sync + Copy, D: Dimension>(
 #[inline(always)]
 /// Main entrypoint of the Rusev library. This function computes the precision, recall, fscore and
 /// support of the true and predicted tokens. It returns information about the individual classes
-/// and different overall averages. The returned structure can be used to prettyprint the results.
+/// and different overall averages. The returned structure can be used to prettyprint the results
+/// or be converted into a HashSet.
 ///
 /// * `y_true`: True tokens
 /// * `y_pred`: Predicted tokens

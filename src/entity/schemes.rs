@@ -314,6 +314,10 @@ pub enum SchemeType {
     BILOU,
 }
 
+impl Default for SchemeType {
+    fn default() -> Self { SchemeType::IOB2}
+}
+
 #[derive(Debug, Clone, PartialEq)]
 /// Encountered an invalid token when parsing the entities.
 pub struct InvalidToken(pub String);
