@@ -104,10 +104,11 @@ fn benchmark_big_dataset(c: &mut Criterion) {
 }
 
 criterion_group!(
-    name=long_report_benches;
+    name=fast_report_benches;
     config = Criterion::default().sample_size(250).with_profiler(PProfProfiler::new(3000, Output::Flamegraph(None)));
     targets = benchmark_big_dataset,
     benchmark_small_dataset,
     benchmark_huge_dataset
 );
-criterion_main!(long_report_benches);
+criterion_main!(fast_report_benches);
+
