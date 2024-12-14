@@ -442,6 +442,9 @@ impl<S: AsRef<str> + std::fmt::Debug> From<ArrayNotUniqueOrEmpty> for Computatio
     }
 }
 
+/// Type alias for representing the output of the `precision_recall_fscore_support`. Each arrays
+/// contain a vector of f32. The first array contains the precision, the second the recall, the
+/// third the f-score and the last one the support.
 pub type PrecisionRecallFScoreTrueSum = (
     Array<f32, Dim<[usize; 1]>>,
     Array<f32, Dim<[usize; 1]>>,

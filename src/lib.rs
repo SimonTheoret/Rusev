@@ -48,7 +48,7 @@ pub use metrics::{
 
 pub use reporter::{ClassMetrics, Reporter};
 
-pub use config::{DefaultRusevConfig, RusevConfig};
+pub use config::{DefaultRusevConfig, RusevConfig, RusevConfigBuilder};
 
 /// Main entrypoint of the Rusev library. This function computes the precision, recall, fscore and
 /// support of the true and predicted tokens. It returns information about the individual classes

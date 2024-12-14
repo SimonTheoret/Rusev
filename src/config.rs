@@ -8,7 +8,7 @@ use crate::entity::SchemeType;
 use crate::metrics::DivByZeroStrat;
 use std::fmt::{Debug, Display};
 
-/// Reasonable default configuration when computation sequences' metrics.
+/// Reasonable default configuration when computation metrics.
 pub type DefaultRusevConfig = RusevConfig<Vec<f32>, DivByZeroStrat, SchemeType>;
 
 impl<Samples, ZeroDiv, Scheme> From<(Option<Samples>, ZeroDiv, Option<Scheme>, bool, bool, bool)>
