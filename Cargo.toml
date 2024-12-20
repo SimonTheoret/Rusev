@@ -51,6 +51,10 @@ harness = false
 name = "classification_report_fast"
 harness = false
 
+[[bench]]
+name = "classification_report_parallel"
+harness = false
+
 [profile.release]
 lto="fat"
 # Reduction in performance when using codegen-units=1

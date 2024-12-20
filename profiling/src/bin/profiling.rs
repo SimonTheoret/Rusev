@@ -108,7 +108,7 @@ fn main() {
                 rusev::DivByZeroStrat::ReplaceBy0,
                 rusev::SchemeType::IOB2,
                 false,
-                true,
+                false,
                 true,
             )
             .unwrap();

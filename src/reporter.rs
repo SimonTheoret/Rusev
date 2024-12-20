@@ -37,7 +37,7 @@ use std::hash::Hash;
 /// assert_eq!(expected_report, reporter.to_string());
 /// ```
 ///
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Reporter {
     pub(crate) classes: BTreeSet<ClassMetricsInner>,
 }
@@ -50,23 +50,15 @@ impl From<Reporter> for HashSet<ClassMetrics> {
         value
             .classes
             .into_iter()
-            .map(|x| ClassMetrics::from(x))
+            .map( ClassMetrics::from)
             .collect()
     }
 }
 
-impl Default for Reporter {
-    fn default() -> Reporter {
-        Reporter {
-            classes: BTreeSet::new(),
-        }
-    }
-}
 
 impl Reporter {
     pub(crate) fn insert(&mut self, metrics: ClassMetricsInner) -> bool {
-        let ret = self.classes.insert(metrics);
-        ret
+        self.classes.insert(metrics)
     }
 }
 // impl Deref for Reporter {
@@ -162,6 +154,7 @@ impl PartialEq for ClassMetricsInner {
 }
 impl Eq for ClassMetricsInner {}
 
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl PartialOrd for ClassMetricsInner {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match self.average.cmp(&other.average) {
@@ -225,6 +218,7 @@ impl Display for Average {
 /// Average implements partial ordering. This is used during the
 /// reporting to represent the ClassMetrics with an `average` other
 /// than `None` as `Greater` than those with `None`.
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl PartialOrd for Average {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match (self, other) {

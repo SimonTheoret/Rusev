@@ -703,7 +703,7 @@ pub fn classification_report<'a>(
     check_consistent_length(y_true.as_ref(), y_pred.as_ref())?;
     let mut y_true_struct = TokenVecs::from(y_true);
     let mut y_pred_struct = TokenVecs::from(y_pred);
-    let sample_weight_array = sample_weight.map(|x| ArcArray::from_vec(x));
+    let sample_weight_array = sample_weight.map( ArcArray::from_vec);
     let entities_true = if strict {
         Entities::try_from_vecs_strict(&mut y_true_struct, scheme, suffix)?
     } else {
