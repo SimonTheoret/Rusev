@@ -187,7 +187,7 @@ fn check_for_empty_slices<T>(y_true: &[T], y_pred: &[T]) -> Result<(), Computati
     if y_pred_is_empty {
         return Err(ComputationError::EmptyInput(String::from("y_pred")));
     };
-     Ok(())
+    Ok(())
 }
 
 fn check_consistent_length<T>(

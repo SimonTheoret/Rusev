@@ -24,7 +24,7 @@ use std::hash::Hash;
 ///
 ///
 /// let reporter = classification_report(y_true, y_pred, None, DivByZeroStrat::ReplaceBy0,
-///  SchemeType::IOB2, false, true, true).unwrap();
+///  SchemeType::IOB2, false, false, true).unwrap();
 /// let expected_report = "Class, Precision, Recall, Fscore, Support
 /// Overall_Weighted, 1, 0.6666667, 0.77777785, 3
 /// Overall_Micro, 0.6666667, 0.6666667, 0.6666667, 3

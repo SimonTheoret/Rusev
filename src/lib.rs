@@ -64,13 +64,15 @@ pub use config::{DefaultRusevConfig, RusevConfig, RusevConfigBuilder};
 ///
 /// #Example
 /// ```rust
+/// use rusev::{SchemeType, RusevConfigBuilder, DefaultRusevConfig, classification_report_conf};
+///
 /// let y_true = vec![vec!["B-TEST", "B-NOTEST", "O", "B-TEST"]];
 /// let y_pred = vec![vec!["O", "B-NOTEST", "B-OTHER", "B-TEST"]];
-/// let config:  = RusevConfigBuilder::default().scheme(SchemeType::IOB2).
+/// let config: DefaultRusevConfig =
+/// RusevConfigBuilder::default().scheme(SchemeType::IOB2).strict(true).build();
 ///
-///
-/// let reporter = classification_report(y_true, y_pred, None, DivByZeroStrat::ReplaceBy0,
-///  SchemeType::IOB2, false, true, true).unwrap();
+/// let wrapped_reporter = classification_report_conf(y_true, y_pred, config);
+/// let reporter = wrapped_reporter.unwrap();
 /// let expected_report = "Class, Precision, Recall, Fscore, Support
 /// Overall_Weighted, 1, 0.6666667, 0.77777785, 3
 /// Overall_Micro, 0.6666667, 0.6666667, 0.6666667, 3
@@ -78,7 +80,6 @@ pub use config::{DefaultRusevConfig, RusevConfig, RusevConfigBuilder};
 /// NOTEST, 1, 1, 1, 1
 /// OTHER, 0, 0, 0, 0
 /// TEST, 1, 0.5, 0.6666667, 2\n";
-///
 ///
 /// assert_eq!(expected_report, reporter.to_string());
 /// ```
