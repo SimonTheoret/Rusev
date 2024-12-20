@@ -34,7 +34,7 @@ impl<'a> Entity<'a> {
     }
 }
 
-impl<'a> Display for Entity<'a> {
+impl Display for Entity<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "({}, {}, {})", self.tag, self.start, self.end)
     }
@@ -46,8 +46,8 @@ pub(crate) fn get_entities_lenient<'a>(
     sequence: &'a TokenVecs<&'a str>,
     suffix: bool,
 ) -> Result<Entities<'a>, ParsingError<String>> {
-    let mut res = Vec::with_capacity(sequence.len() / 2 as usize);
-    let mut indices = Vec::with_capacity(sequence.len() / 2 as usize);
+    let mut res = Vec::with_capacity(sequence.len() / 2);
+    let mut indices = Vec::with_capacity(sequence.len() / 2);
     indices.push(0);
     for vec_of_chunks in sequence.iter_vec() {
         let chunk_iter = LenientChunkIter::new(vec_of_chunks, suffix);
@@ -162,7 +162,7 @@ impl<'a> LenientChunkIter<'a> {
     //     type -> classe
     ///     """Checks if a chunk ended between the previous and current word.
     #[inline(always)]
-    fn end_of_chunk(&self, current_prefix: &UserPrefix, current_type: &Cow<'a, str>) -> bool {
+    fn end_of_chunk(&self, current_prefix: &UserPrefix, current_type: &'a str) -> bool {
         let wrapped_type = Some(current_type);
         // Cloning a prefix is very inexpensive
         match (self.prev_prefix.clone(), current_prefix) {
@@ -175,20 +175,15 @@ impl<'a> LenientChunkIter<'a> {
             (UserPrefix::I, UserPrefix::S) => true,
             (UserPrefix::I, UserPrefix::O) => true,
             (self_prefix, _) => {
-                if !matches!(self_prefix, UserPrefix::O)
-                    && &self.prev_type.as_ref() != &wrapped_type
-                {
-                    true
-                } else {
-                    false
-                }
+                !matches!(self_prefix, UserPrefix::O)
+                    && self.prev_type.as_ref().map(|t| t.borrow()) != wrapped_type
             }
         }
     }
 
     ///     """Checks if a chunk started between the previous and current word.
     #[inline(always)]
-    fn start_of_chunk(&self, current_prefix: &UserPrefix, current_type: &Cow<'a, str>) -> bool {
+    fn start_of_chunk(&self, current_prefix: &UserPrefix, current_type: &'a str) -> bool {
         let wrapped_type = Some(current_type);
         match (self.prev_prefix.clone(), current_prefix) {
             // Cloning a prefix is very inexpensive
@@ -201,13 +196,8 @@ impl<'a> LenientChunkIter<'a> {
             (UserPrefix::O, UserPrefix::E) => true,
             (UserPrefix::O, UserPrefix::I) => true,
             (_, curr_prefix) => {
-                if !matches!(curr_prefix, UserPrefix::O)
-                    && &self.prev_type.as_ref() != &wrapped_type
-                {
-                    true
-                } else {
-                    false
-                }
+                !matches!(curr_prefix, UserPrefix::O)
+                    && self.prev_type.as_ref().map(|t| t.borrow()) != wrapped_type
             }
         }
     }
@@ -522,7 +512,7 @@ impl<'a> Deref for Entities<'a> {
         &self.0
     }
 }
-impl<'a> DerefMut for Entities<'a> {
+impl DerefMut for Entities<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -566,10 +556,10 @@ impl<'a> TryFromVecStrict<'a> for Entities<'a> {
         let len = vec_of_tokens_2d.len();
         let mut tokens = Vec::with_capacity(len);
         let mut_iter = UnsafeCell::new(vec_of_tokens_2d.iter_vec_mut());
-        _ = loop {
+        loop {
             let current = unsafe { &mut *mut_iter.get() };
             let current_next = current.custom_next();
-            if let None = current_next {
+            if current_next.is_none() {
                 let res: Result<Vec<Vec<Entity>>, _> = tokens
                     .into_iter()
                     .map(|t| EntitiesIter::new(t).collect())
@@ -587,7 +577,7 @@ impl<'a> TryFromVecStrict<'a> for Entities<'a> {
                     Err(e) => Err(e)?,
                 }
             }
-        };
+        }
     }
 }
 
@@ -602,7 +592,7 @@ impl<'a> Entities<'a> {
     /// Filters the entities for a given tag name and returns them in a HashSet.
     ///
     /// * `tag_name`: This variable is used to compare the tag of the entity with. Only those whose
-    /// tag is equal to a reference to `tag_name` are added into the returned HashSet.
+    ///   tag is equal to a reference to `tag_name` are added into the returned HashSet.
     pub fn filter<S: AsRef<str>>(&self, tag_name: S) -> AHashSet<&Entity> {
         let tag_name_ref = tag_name.as_ref();
         AHashSet::from_iter(self.iter().filter(|e| e.tag == tag_name_ref))

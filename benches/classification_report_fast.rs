@@ -59,7 +59,7 @@ fn benchmark_small_dataset(c: &mut Criterion) {
                 rusev::DivByZeroStrat::ReplaceBy0,
                 rusev::SchemeType::IOB2,
                 false,
-                true,
+                false,
                 true,
             )
             .unwrap()
@@ -78,7 +78,7 @@ fn benchmark_huge_dataset(c: &mut Criterion) {
                 rusev::DivByZeroStrat::ReplaceBy0,
                 rusev::SchemeType::IOB2,
                 false,
-                true,
+                false,
                 true,
             )
             .unwrap()
@@ -96,7 +96,7 @@ fn benchmark_big_dataset(c: &mut Criterion) {
                 rusev::DivByZeroStrat::ReplaceBy0,
                 rusev::SchemeType::IOB2,
                 false,
-                true,
+                false,
                 true,
             )
             .unwrap()

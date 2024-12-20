@@ -178,26 +178,16 @@ impl Display for InconsistentLengthError {
 impl Error for InconsistentLengthError {}
 
 fn check_for_empty_slices<T>(y_true: &[T], y_pred: &[T]) -> Result<(), ComputationError<String>> {
-    let y_true_is_empty: bool;
-    if y_true.is_empty() {
-        y_true_is_empty = true;
-    } else {
-        y_true_is_empty = false;
-    }
+    let y_true_is_empty = y_true.is_empty();
     if y_true_is_empty {
         return Err(ComputationError::EmptyInput(String::from("y_true")));
     };
 
-    let y_pred_is_empty: bool;
-    if y_pred.is_empty() {
-        y_pred_is_empty = true;
-    } else {
-        y_pred_is_empty = false;
-    }
+    let y_pred_is_empty = y_pred.is_empty();
     if y_pred_is_empty {
         return Err(ComputationError::EmptyInput(String::from("y_pred")));
     };
-    return Ok(());
+     Ok(())
 }
 
 fn check_consistent_length<T>(
@@ -281,7 +271,7 @@ fn extract_tp_actual_correct_lenient<'a>(
     };
     let mut entities_true_init: AHashMap<&str, AHashSet<(usize, usize)>> = AHashMap::default();
     for e in entities_true_tmp.iter() {
-        let (start, end) = (e.start.clone(), e.end.clone());
+        let (start, end) = (e.start, e.end);
         match entities_true_init.get_mut(e.tag.as_ref()) {
             Some(set) => {
                 set.insert((start, end));
@@ -299,7 +289,7 @@ fn extract_tp_actual_correct_lenient<'a>(
     // };
     let mut entities_pred_init: AHashMap<&str, AHashSet<(usize, usize)>> = AHashMap::default();
     for e in entities_pred_tmp.iter() {
-        let (start, end) = (e.start.clone(), e.end.clone());
+        let (start, end) = (e.start, e.end);
         match entities_pred_init.get_mut(e.tag.as_ref()) {
             Some(set) => {
                 set.insert((start, end));
@@ -341,11 +331,11 @@ fn extract_tp_actual_correct_lenient<'a>(
         let tp_sum_len = tmp_pred_init_set.intersection(tmp_true_init_set);
         tp_sum.push(tp_sum_len.count());
     }
-    return Ok((
+    Ok((
         Array::from(true_sum),
         Array::from(tp_sum),
         Array::from(pred_sum),
-    ));
+    ))
 }
 
 // entities_true = defaultdict(set)
@@ -452,6 +442,7 @@ pub type PrecisionRecallFScoreTrueSum = (
     Array<usize, Dim<[usize; 1]>>,
 );
 
+#[allow(clippy::too_many_arguments)]
 /// One of the main entrypoints of the Rusev library. This function computes the precision, recall,
 /// fscore and support of the true and predicted tokens. This method does NOT check the lengths of
 /// `y_true` and `y_pred`.
@@ -495,6 +486,7 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn precision_recall_fscore_support_inner<'a, F: FloatExt>(
     y_true: &'a mut TokenVecs<&'a str>,
     y_pred: &'a mut TokenVecs<&'a str>,
@@ -674,6 +666,7 @@ fn par_replace<Data: PartialEq + Send + Sync + Copy, D: Dimension>(
 }
 
 #[inline(always)]
+#[allow(clippy::too_many_arguments)]
 /// Main entrypoint of the Rusev library. This function computes the precision, recall, fscore and
 /// support of the true and predicted tokens. It returns information about the individual classes
 /// and different overall averages. The returned structure can be used to prettyprint the results
@@ -703,7 +696,7 @@ pub fn classification_report<'a>(
     check_consistent_length(y_true.as_ref(), y_pred.as_ref())?;
     let mut y_true_struct = TokenVecs::from(y_true);
     let mut y_pred_struct = TokenVecs::from(y_pred);
-    let sample_weight_array = sample_weight.map( ArcArray::from_vec);
+    let sample_weight_array = sample_weight.map(ArcArray::from_vec);
     let entities_true = if strict {
         Entities::try_from_vecs_strict(&mut y_true_struct, scheme, suffix)?
     } else {
