@@ -1,5 +1,6 @@
 # TODO
-- [ ] Remove `delimiter` argument. It is not used!
+- [x] Remove `delimiter` argument. It is not used!
+- [ ] Start fuzzy testing or property testing
 - [x] Finish the calculation implementation
   - [x] Remodel Prefix into UserPrefix AND Prefix
 - [x] Write a lot of tests
