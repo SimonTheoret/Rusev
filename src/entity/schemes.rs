@@ -161,8 +161,8 @@ impl FromStr for Prefix {
 }
 
 //TODO: Remove this impl and use UserPrefix instead
-impl<'a> Prefix {
-    fn try_from_with_static_error(value: &'a str) -> Result<Self, ParsingError<String>> {
+impl Prefix {
+    fn try_from_with_static_error(value: &str) -> Result<Self, ParsingError<String>> {
         match value {
             "I" => Ok(Prefix::I),
             "O" => Ok(Prefix::O),
@@ -193,7 +193,7 @@ pub(super) struct InnerToken<'a> {
     pub(super) tag: Cow<'a, str>,
 }
 
-impl<'a> Default for InnerToken<'a> {
+impl Default for InnerToken<'_> {
     fn default() -> Self {
         InnerToken {
             token: Cow::Borrowed(""),
@@ -214,9 +214,9 @@ enum PrefixCharIndex {
     End(usize, usize),
 }
 impl PrefixCharIndex {
-    fn try_new<'a>(suffix: bool, token: &'a Cow<'a, str>) -> Result<Self, ParsingError<String>> {
+    fn try_new(suffix: bool, token: &str) -> Result<Self, ParsingError<String>> {
         if suffix {
-            let count = token.as_ref().chars().count();
+            let count = token.chars().count();
             if count == 0 {
                 return Err(ParsingError::EmptyToken);
             }
@@ -305,18 +305,17 @@ impl<'a> InnerToken<'a> {
 #[derive(Debug, Clone, Copy, Sequence, Hash, Eq, PartialEq)]
 /// Enumeration of the supported Schemes. They are use to indicate how we are supposed to parse and
 /// chunk the different tokens.
+#[derive(Default)]
 pub enum SchemeType {
     IOB1,
     IOE1,
+    #[default]
     IOB2,
     IOE2,
     IOBES,
     BILOU,
 }
 
-impl Default for SchemeType {
-    fn default() -> Self { SchemeType::IOB2}
-}
 
 #[derive(Debug, Clone, PartialEq)]
 /// Encountered an invalid token when parsing the entities.
@@ -341,7 +340,7 @@ pub(super) enum Token<'a> {
     BILOU { token: InnerToken<'a> },
 }
 
-impl<'a> Default for Token<'a> {
+impl Default for Token<'_> {
     fn default() -> Self {
         Token::IOB1 {
             token: InnerToken::default(),

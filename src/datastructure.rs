@@ -15,13 +15,13 @@ impl<T> TokenVecs<T> {
     }
 }
 
-impl<'a, T> TokenVecs<T> {
+impl<T> TokenVecs<T> {
     pub(crate) fn len(&self) -> usize {
         self.tokens.len()
     }
 }
 
-impl<'a, T> From<Vec<Vec<T>>> for TokenVecs<T> {
+impl<T> From<Vec<Vec<T>>> for TokenVecs<T> {
     fn from(value: Vec<Vec<T>>) -> Self {
         let length: usize = value.iter().map(|v| v.len()).sum();
         let indices_length = value.len();
@@ -74,7 +74,7 @@ impl<'a, T> TokenVecs<T> {
         self.tokens.iter()
     }
     pub(crate) fn iter_vec(&'a self) -> VecsIter<'a, T> {
-        VecsIter::new(&self)
+        VecsIter::new(self)
     }
     pub(crate) fn iter_vec_mut(&'a mut self) -> VecsIterMut<'a, T> {
         VecsIterMut::new(self)

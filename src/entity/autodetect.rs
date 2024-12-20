@@ -97,7 +97,7 @@ struct AutoDetectScheme<'a> {
 
 /// We can try to auto-detect the SchemeType used. This would allow to simplify the interface of
 /// the lib and to simplify the life of the user, who might not know what scheme they are using.
-impl<'a> TryFrom<AutoDetectScheme<'a>> for SchemeType {
+impl TryFrom<AutoDetectScheme<'_>> for SchemeType {
     type Error = AutoDetectError;
     fn try_from(value: AutoDetectScheme) -> Result<Self, Self::Error> {
         Self::try_auto_detect_by_prefix(&value).ok_or(AutoDetectError::UnsupportedScheme)

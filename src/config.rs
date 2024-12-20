@@ -120,6 +120,17 @@ where
     strict: bool,
 }
 
+impl<Samples, ZeroDiv, Scheme> Default for RusevConfigBuilder<Samples, ZeroDiv, Scheme>
+where
+    Samples: Into<Option<Vec<f32>>>,
+    ZeroDiv: Into<DivByZeroStrat>,
+    Scheme: Into<Scheme>,
+ {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<Samples, ZeroDiv, Scheme> RusevConfigBuilder<Samples, ZeroDiv, Scheme>
 where
     Samples: Into<Option<Vec<f32>>>,
