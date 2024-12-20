@@ -11,6 +11,19 @@ use std::fmt::{Debug, Display};
 /// Reasonable default configuration when computation metrics.
 pub type DefaultRusevConfig = RusevConfig<Vec<f32>, DivByZeroStrat, SchemeType>;
 
+impl DefaultRusevConfig {
+    pub fn new() -> Self {
+        Self {
+            sample_weights: None,
+            zero_division: DivByZeroStrat::ReplaceBy0,
+            scheme: Some(SchemeType::IOB2),
+            suffix: false,
+            parallel: false,
+            strict: false,
+        }
+    }
+}
+
 impl<Samples, ZeroDiv, Scheme> From<(Option<Samples>, ZeroDiv, Option<Scheme>, bool, bool, bool)>
     for RusevConfig<Samples, ZeroDiv, Scheme>
 where
@@ -26,6 +39,22 @@ where
             suffix: value.3,
             parallel: value.4,
             strict: value.5,
+        }
+    }
+}
+
+impl<Samples, ZeroDiv, Scheme> From<RusevConfigBuilder<Samples, ZeroDiv, Scheme>>
+    for RusevConfig<Samples, ZeroDiv, SchemeType>
+where
+    Samples: Into<Option<Vec<f32>>>,
+    ZeroDiv: Into<DivByZeroStrat>,
+    Scheme: Into<SchemeType>,
+{
+    fn from(value: RusevConfigBuilder<Samples, ZeroDiv, Scheme>) -> Self {
+        Self {
+            sample_weights: value.sample_weights,
+            zero_division: value.zero_division.into(),
+            scheme: value.scheme,
         }
     }
 }
@@ -105,6 +134,23 @@ enum LeftOrRight<L, R> {
     Right(R),
 }
 
+impl<T, L, R> From<LeftOrRight<L,R>> for T
+where
+    L: Into<T>,
+    R: Into<T>,
+{
+    fn from(value:LeftOrRight<L, R> ) -> T {
+        match value {
+            LeftOrRight::Left(l) => l.into(),
+            LeftOrRight::Right(r) => r.into(),
+        }
+    }
+}
+
+// impl LeftOrRight  {
+//     fn into_inner(self) ->
+// }
+
 /// This builder can be used to build and customize a `RusevConfig` stucture.
 pub struct RusevConfigBuilder<Samples, ZeroDiv, Scheme>
 where
@@ -124,8 +170,8 @@ impl<Samples, ZeroDiv, Scheme> Default for RusevConfigBuilder<Samples, ZeroDiv, 
 where
     Samples: Into<Option<Vec<f32>>>,
     ZeroDiv: Into<DivByZeroStrat>,
-    Scheme: Into<Scheme>,
- {
+    Scheme: Into<SchemeType>,
+{
     fn default() -> Self {
         Self::new()
     }
@@ -135,7 +181,7 @@ impl<Samples, ZeroDiv, Scheme> RusevConfigBuilder<Samples, ZeroDiv, Scheme>
 where
     Samples: Into<Option<Vec<f32>>>,
     ZeroDiv: Into<DivByZeroStrat>,
-    Scheme: Into<Scheme>,
+    Scheme: Into<SchemeType>,
 {
     pub fn sample_weights(mut self, samples_weights: Samples) -> Self {
         self.sample_weights = Some(samples_weights);
@@ -170,5 +216,8 @@ where
             parallel: false,
             strict: false,
         }
+    }
+    pub fn build(self) -> RusevConfig<Samples, ZeroDiv, Scheme> {
+        RusevConfig::from(self)
     }
 }

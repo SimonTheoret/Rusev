@@ -19,7 +19,7 @@ The BILOU and IOBES schemes are only supported in strict mode.
 ## More information about schemes
 * [Wikipedia](https://en.wikipedia.org/wiki/Inside%E2%80%93outside%E2%80%93beginning_(tagging))
 * [Article](https://cs229.stanford.edu/proj2005/KrishnanGanapathy-NamedEntityRecognition.pdf), chapter 2
-*
+
 # Terminology
 This library partially reuses the terminology of the SeqEval library. The concepts might not be
 mapped one to one.
@@ -55,11 +55,33 @@ pub use config::{DefaultRusevConfig, RusevConfig, RusevConfigBuilder};
 /// Main entrypoint of the Rusev library. This function computes the precision, recall, fscore and
 /// support of the true and predicted tokens. It returns information about the individual classes
 /// and different overall averages. The returned structure can be used to prettyprint the results
-/// or be converted into a HashSet.
+/// or be converted into a HashSet. Instead of taking in the raw parameters, this function takes a
+/// `RusevConfig` struct.
 ///
 /// * `y_true`: True tokens
 /// * `y_pred`: Predicted tokens
 /// * `config`: Parameters used to compute the metrics of each classes.
+///
+/// #Example
+/// ```rust
+/// let y_true = vec![vec!["B-TEST", "B-NOTEST", "O", "B-TEST"]];
+/// let y_pred = vec![vec!["O", "B-NOTEST", "B-OTHER", "B-TEST"]];
+/// let config:  = RusevConfigBuilder::default().scheme(SchemeType::IOB2).
+///
+///
+/// let reporter = classification_report(y_true, y_pred, None, DivByZeroStrat::ReplaceBy0,
+///  SchemeType::IOB2, false, true, true).unwrap();
+/// let expected_report = "Class, Precision, Recall, Fscore, Support
+/// Overall_Weighted, 1, 0.6666667, 0.77777785, 3
+/// Overall_Micro, 0.6666667, 0.6666667, 0.6666667, 3
+/// Overall_Macro, 0.6666667, 0.5, 0.5555556, 3
+/// NOTEST, 1, 1, 1, 1
+/// OTHER, 0, 0, 0, 0
+/// TEST, 1, 0.5, 0.6666667, 2\n";
+///
+///
+/// assert_eq!(expected_report, reporter.to_string());
+/// ```
 pub fn classification_report_conf<Samples, ZeroDiv, Scheme>(
     y_true: Vec<Vec<&str>>,
     y_pred: Vec<Vec<&str>>,
