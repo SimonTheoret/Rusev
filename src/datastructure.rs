@@ -22,6 +22,7 @@ impl<T> TokenVecs<T> {
 }
 
 impl<T> From<Vec<Vec<T>>> for TokenVecs<T> {
+    #[inline(always)]
     fn from(value: Vec<Vec<T>>) -> Self {
         let length: usize = value.iter().map(|v| v.len()).sum();
         let indices_length = value.len();
@@ -44,6 +45,7 @@ impl<T> From<Vec<Vec<T>>> for TokenVecs<T> {
 }
 
 impl<'a> From<Vec<Vec<&'a str>>> for TokenVecs<Cow<'a, str>> {
+    #[inline(always)]
     fn from(value: Vec<Vec<&'a str>>) -> Self {
         let length: usize = value.iter().map(|v| v.len()).sum();
         let indices_length = value.len();
