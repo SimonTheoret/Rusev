@@ -186,19 +186,19 @@ enum Tag {
 #[derive(Debug, PartialEq, Hash, Clone)]
 pub(super) struct InnerToken<'a> {
     /// The full token, such as `"B-PER"`, `"I-LOC"`, etc.
-    pub(super) token: Cow<'a, str>,
+    pub(super) token: &'a str,
     /// The prefix, such as `B`, `I`, `O`, etc.
     pub(super) prefix: UserPrefix,
     /// The tag, such as '"PER"', '"LOC"'
-    pub(super) tag: Cow<'a, str>,
+    pub(super) tag: &'a str,
 }
 
 impl Default for InnerToken<'_> {
     fn default() -> Self {
         InnerToken {
-            token: Cow::Borrowed(""),
+            token: "",
             prefix: UserPrefix::I,
-            tag: Cow::Borrowed(""),
+            tag: "",
         }
     }
 }
@@ -242,7 +242,7 @@ impl<'a> InnerToken<'a> {
     /// * `delimiter`: Indicates the char used to separate the Prefix from the rest of the tag
     #[inline(always)]
     pub(super) fn try_new(
-        token: Cow<'a, str>,
+        token: &'a str,
         suffix: bool,
     ) -> Result<Self, ParsingError<String>> {
         let prefix_index_struct = PrefixCharIndex::try_new(suffix, &token)?;
@@ -252,8 +252,8 @@ impl<'a> InnerToken<'a> {
             Some(c) => UserPrefix::try_from(c)?,
             None => return Err(ParsingError::PrefixError(String::from(token))),
         };
-        let tag_before_strip = match prefix_index_struct {
-            PrefixCharIndex::Start(_) => token.chars().skip(2).collect::<Cow<str>>(),
+        let tag = match prefix_index_struct {
+            PrefixCharIndex::Start(_) => &token[2..],/* .chars().skip(2).collect::<Cow<str>>(), */
             PrefixCharIndex::End(_, _count @ 1) => token.clone(),
             PrefixCharIndex::End(_, _count @ 2) => {
                 return Err(ParsingError::PrefixError(String::from(token)))
@@ -265,9 +265,9 @@ impl<'a> InnerToken<'a> {
                 .map(|(_, c)| c)
                 .collect::<Cow<str>>(),
         };
-        let mut tag = tag_before_strip;
-        if tag == "" {
-            tag = Cow::Borrowed("_");
+        let mut tag = tag;
+        if tag.len() == 0 {
+            tag = "_";
         }
         Ok(Self { token, prefix, tag })
     }
@@ -720,6 +720,17 @@ mod test {
         let all_prefixes: Vec<_> = all::<UserPrefix>().collect();
         for p in all_prefixes {
             let len = p.to_string().graphemes(true).count();
+            assert_eq!(1, len);
+        }
+    }
+
+    #[test]
+    /// This function tests an implicit invariant used when building `Tokens` and `UnicodeIndex`:
+    /// The prefix must be composed of a single unicode character.
+    fn test_prefix_length() {
+        let all_prefixes: Vec<_> = all::<UserPrefix>().collect();
+        for p in all_prefixes {
+            let len = p.to_string().len();
             assert_eq!(1, len);
         }
     }
