@@ -358,7 +358,7 @@ impl<'a> Iterator for EntitiesIterAdaptor<'a> {
                 .forward(self.index + 1, &borrowed_current);
             if mut_tokens.borrow().is_end(end) {
                 drop(borrowed_current);
-                let tag = current.into_inner().take_tag();
+                let tag = current.into_inner().get_tag();
                 let entity = Entity {
                     start: self.index,
                     end,

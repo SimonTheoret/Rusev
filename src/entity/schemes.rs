@@ -254,7 +254,7 @@ impl<'a> InnerToken<'a> {
             Some(c) => UserPrefix::try_from(c)?,
             None => return Err(ParsingError::PrefixError(String::from(token))),
         };
-        if token.len() == 1 {
+        if token.chars().count() == 1 {
             return Ok(Self {
                 token,
                 prefix,
@@ -262,28 +262,23 @@ impl<'a> InnerToken<'a> {
             });
         };
         let mut tag = match prefix_index_struct {
-            PrefixCharIndex::Start(_) =>
-            // {
-            //     let offset: usize = token
-            //         .chars()
-            //         .enumerate()
-            //         .take_while(|(i, _)| i < &2)
-            //         .map(|(_, c)| size_of_val(&c))
-            //         .sum();
-            //     &token[offset..]
-            // }
-            {
-                &token[2..]
+            PrefixCharIndex::Start(_) => {
+                let (offset, _) = token.char_indices().nth(2).unwrap();
+                &token[offset..]
             }
             PrefixCharIndex::End(_, _count @ 1) => token,
             PrefixCharIndex::End(_, _count @ 2) => {
                 return Err(ParsingError::PrefixError(String::from(token)))
             }
-            PrefixCharIndex::End(_, _count) => &token[0..token.len() - 2], // .chars()
-                                                                           // .enumerate()
-                                                                           // .take_while(|(i, _)| i < &(count - 2))
-                                                                           // .map(|(_, c)| c)
-                                                                           // .collect::<Cow<str>>(),
+            PrefixCharIndex::End(_, count) => {
+                let (_, (offset, _)) = token
+                    .char_indices()
+                    .enumerate()
+                    .take_while(|(i, _)| i < &(count - 1))
+                    .last()
+                    .unwrap();
+                &token[0..offset]
+            }
         };
         if tag.len() == 0 {
             tag = "_";
@@ -569,7 +564,7 @@ impl<'a> Token<'a> {
             Self::BILOU { token } => token.check_patterns(prev, self.end_patterns()),
         }
     }
-    pub(super) fn take_tag(&mut self) -> &'a str {
+    pub(super) fn get_tag(&mut self) -> &'a str {
         match self {
             Self::IOB1 { token } => token.tag,
             Self::IOE1 { token } => token.tag,
@@ -703,7 +698,7 @@ mod test {
             ("PER-I", "PER", UserPrefix::I),
             ("PER-B", "PER", UserPrefix::B),
             ("LOC-I", "LOC", UserPrefix::I),
-            ("O", "O", UserPrefix::O),
+            ("O", "_", UserPrefix::O),
         ];
         let suffix = true;
         for (i, (token, tag, prefix)) in tokens.into_iter().enumerate() {
