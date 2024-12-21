@@ -15,7 +15,6 @@ use ndarray::{prelude::*, Array, Data, ScalarOperand, Zip};
 use ndarray_stats::{errors::MultiInputError, SummaryStatisticsExt};
 use num::{Float, Num, NumCast};
 use std::{
-    borrow::Borrow,
     cmp,
     collections::BTreeSet,
     error::Error,
@@ -272,14 +271,14 @@ fn extract_tp_actual_correct_lenient<'a>(
     let mut entities_true_init: AHashMap<&str, AHashSet<(usize, usize)>> = AHashMap::default();
     for e in entities_true_tmp.iter() {
         let (start, end) = (e.start, e.end);
-        match entities_true_init.get_mut(e.tag.as_ref()) {
+        match entities_true_init.get_mut(e.tag) {
             Some(set) => {
                 set.insert((start, end));
             }
             None => {
                 let mut tmp_set: AHashSet<(usize, usize)> = AHashSet::default();
                 tmp_set.insert((start, end));
-                entities_true_init.insert(e.tag.borrow(), tmp_set);
+                entities_true_init.insert(e.tag, tmp_set);
             }
         }
     }
@@ -290,14 +289,14 @@ fn extract_tp_actual_correct_lenient<'a>(
     let mut entities_pred_init: AHashMap<&str, AHashSet<(usize, usize)>> = AHashMap::default();
     for e in entities_pred_tmp.iter() {
         let (start, end) = (e.start, e.end);
-        match entities_pred_init.get_mut(e.tag.as_ref()) {
+        match entities_pred_init.get_mut(e.tag) {
             Some(set) => {
                 set.insert((start, end));
             }
             None => {
                 let mut tmp_set: AHashSet<(usize, usize)> = AHashSet::default();
                 tmp_set.insert((start, end));
-                entities_pred_init.insert(e.tag.borrow(), tmp_set);
+                entities_pred_init.insert(e.tag, tmp_set);
             }
         }
     }

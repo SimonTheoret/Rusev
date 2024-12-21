@@ -6,3 +6,4 @@
 - [x] Write a lot of tests
   - [x] Write property tests
 - [x] Start benchmarking
+- [ ] Test for no tag tokens as input (eg. "B", "I", "I", "O")

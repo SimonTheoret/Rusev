@@ -2,7 +2,6 @@ use crate::datastructure::TokenVecs;
 use crate::entity::schemes::{InnerToken, Token, UserPrefix};
 use ahash::AHashSet;
 use std::{
-    borrow::{Borrow, Cow},
     cell::{RefCell, UnsafeCell},
     cmp::Ordering,
     error::Error,
@@ -25,11 +24,11 @@ pub use schemes::{InvalidToken, ParsingError, SchemeType};
 pub struct Entity<'a> {
     pub(crate) start: usize,
     pub(crate) end: usize,
-    pub(crate) tag: Cow<'a, str>,
+    pub(crate) tag: &'a str,
 }
 
 impl<'a> Entity<'a> {
-    pub(crate) fn new(start: usize, end: usize, tag: Cow<'a, str>) -> Self {
+    pub(crate) fn new(start: usize, end: usize, tag: &'a str) -> Self {
         Entity { start, end, tag }
     }
 }
@@ -104,7 +103,7 @@ struct LenientChunkIter<'a> {
     /// The prefix of the previous chunk (e.g. 'I')
     prev_prefix: UserPrefix,
     /// The type of the previous chunk (e.g. `"PER"`)
-    prev_type: Option<Cow<'a, str>>,
+    prev_type: Option<&'a str>,
     begin_offset: usize,
     suffix: bool,
     index: usize,
@@ -129,7 +128,7 @@ impl<'a> Iterator for LenientChunkIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let current_chunk = self.inner.next()?; // no more chunks. We are done
-            let mut inner_token = match InnerToken::try_new(Cow::from(current_chunk), self.suffix) {
+            let mut inner_token = match InnerToken::try_new(current_chunk, self.suffix) {
                 Ok(v) => v,
                 Err(e) => {
                     self.index += 1;
@@ -141,7 +140,7 @@ impl<'a> Iterator for LenientChunkIter<'a> {
                 ret = Some(Ok(Entity::new(
                     self.begin_offset,
                     self.index - 1,
-                    take(&mut self.prev_type).unwrap(),
+                    self.prev_type.unwrap(),
                 )));
                 self.prev_prefix = inner_token.prefix;
                 self.prev_type = Some(inner_token.tag);
@@ -176,7 +175,7 @@ impl<'a> LenientChunkIter<'a> {
             (UserPrefix::I, UserPrefix::O) => true,
             (self_prefix, _) => {
                 !matches!(self_prefix, UserPrefix::O)
-                    && self.prev_type.as_ref().map(|t| t.borrow()) != wrapped_type
+                    && self.prev_type != wrapped_type
             }
         }
     }
@@ -197,7 +196,7 @@ impl<'a> LenientChunkIter<'a> {
             (UserPrefix::O, UserPrefix::I) => true,
             (_, curr_prefix) => {
                 !matches!(curr_prefix, UserPrefix::O)
-                    && self.prev_type.as_ref().map(|t| t.borrow()) != wrapped_type
+                    && self.prev_type != wrapped_type
             }
         }
     }
@@ -226,8 +225,7 @@ impl<'a> Iterator for ExtendedTokensIterator<'a> {
             Ordering::Equal => Some(Ok(take(&mut self.outside_token))),
             Ordering::Less => {
                 let str = unsafe { take(self.tokens.get_unchecked_mut(self.index)) };
-                let cow_str = Cow::from(str);
-                let inner_token = InnerToken::try_new(cow_str, self.suffix);
+                let inner_token = InnerToken::try_new(str, self.suffix);
                 match inner_token {
                     Err(msg) => Some(Err(msg)),
                     Ok(res) => Some(Ok(Token::new(self.scheme, res))),
@@ -271,7 +269,7 @@ impl<'a> Tokens<'a> {
         scheme: SchemeType,
         suffix: bool,
     ) -> Result<Self, ParsingError<String>> {
-        let outside_token_inner = InnerToken::try_new(Cow::Borrowed("O"), suffix)?;
+        let outside_token_inner = InnerToken::try_new("O", suffix)?;
         let outside_token = Token::new(scheme, outside_token_inner);
         let tokens_iter = ExtendedTokensIterator::new(outside_token, tokens, scheme, suffix);
         let extended_tokens: Result<Vec<Token>, ParsingError<String>> = tokens_iter.collect();
@@ -609,7 +607,7 @@ impl<'a> Entities<'a> {
     }
 
     pub fn unique_tags(&self) -> AHashSet<&str> {
-        AHashSet::from_iter(self.iter().map(|e| e.tag.borrow()))
+        AHashSet::from_iter(self.iter().map(|e| e.tag))
     }
 }
 
@@ -622,7 +620,7 @@ pub(super) mod tests {
 
     impl<'a> Entity<'a> {
         pub fn as_tuple(&'a self) -> (usize, usize, &'a str) {
-            (self.start, self.end, self.tag.borrow())
+            (self.start, self.end, self.tag)
         }
     }
 
@@ -643,32 +641,32 @@ pub(super) mod tests {
                 Entity {
                     start: 0,
                     end: 2,
-                    tag: Cow::from("PER")
+                    tag: "PER"
                 },
                 Entity {
                     start: 3,
                     end: 4,
-                    tag: Cow::from("LOC")
+                    tag: "LOC"
                 },
                 Entity {
                     start: 0,
                     end: 2,
-                    tag: Cow::from("GEO")
+                    tag: "GEO"
                 },
                 Entity {
                     start: 3,
                     end: 4,
-                    tag: Cow::from("GEO")
+                    tag: "GEO"
                 },
                 Entity {
                     start: 5,
                     end: 8,
-                    tag: Cow::from("PER")
+                    tag: "PER"
                 },
                 Entity {
                     start: 8,
                     end: 9,
-                    tag: Cow::from("LOC")
+                    tag: "LOC"
                 },
             ]
             .into_boxed_slice()
@@ -749,12 +747,12 @@ pub(super) mod tests {
             Entity {
                 start: 0,
                 end: 2,
-                tag: Cow::Borrowed("PER"),
+                tag: "PER",
             },
             Entity {
                 start: 3,
                 end: 4,
-                tag: Cow::Borrowed("LOC"),
+                tag: "LOC",
             },
         ];
         assert_eq!(entities, expected);
@@ -786,12 +784,12 @@ pub(super) mod tests {
             Entity {
                 start: 0,
                 end: 2,
-                tag: Cow::Borrowed("PER"),
+                tag: "PER",
             },
             Entity {
                 start: 3,
                 end: 4,
-                tag: Cow::Borrowed("LOC"),
+                tag: "LOC",
             },
         ];
         assert_eq!(expected_entities, entities)
@@ -924,8 +922,8 @@ pub(super) mod tests {
         let seq = TokenVecs::new(vec![tokens.clone()]);
         let actual = get_entities_lenient(&seq, false).unwrap();
         let entities = vec![
-            Entity::new(0, 1, Cow::from("PER")),
-            Entity::new(3, 3, Cow::from("LOC")),
+            Entity::new(0, 1, "PER"),
+            Entity::new(3, 3, "LOC"),
         ];
         let expected_tokens = entities.into_boxed_slice();
         let expected_indices = Box::new([0, tokens.len()]);
@@ -944,8 +942,8 @@ pub(super) mod tests {
         let iter = LenientChunkIter::new(tokens.as_ref(), false);
         let actual = iter.collect::<Vec<_>>();
         let expected: Vec<Result<Entity, ParsingError<String>>> = vec![
-            Ok(Entity::new(0, 1, Cow::Borrowed("PER"))),
-            Ok(Entity::new(3, 3, Cow::Borrowed("LOC"))),
+            Ok(Entity::new(0, 1, "PER")),
+            Ok(Entity::new(3, 3, "LOC")),
         ];
         assert_eq!(actual, expected)
     }

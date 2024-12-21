@@ -2,11 +2,9 @@
 This modules gives the tooling necessary to parse a sequence of tokens into a list of entities.
 */
 use enum_iterator::Sequence;
-use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::error::Error;
 use std::fmt::{Debug, Display};
-use std::mem::take;
 use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Hash, Clone, Sequence, Eq)]
@@ -204,8 +202,8 @@ impl Default for InnerToken<'_> {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
-/// This enum represents the positon of the Prefix in a token. It assumes the length (unicode char)
-/// of the prefix is 1.
+/// This enum represents the positon of the Prefix in a token. It assumes the length of the prefix
+/// is 1.
 enum PrefixCharIndex {
     /// This variant indicates that the prefix is located at the start of the token
     Start(usize),
@@ -214,6 +212,13 @@ enum PrefixCharIndex {
     End(usize, usize),
 }
 impl PrefixCharIndex {
+    /// There are 3 cases we need to take care of:
+    /// 1. Suffix is true and the format is "delimiter+prefix", where delimiter is a SINGLE
+    ///    unicode char, such as '-'.
+    /// 2. Suffix is false and the format is "prefix+delimiter", where the delimiter is a SINGLE
+    ///    unicode char, such as '-'.
+    /// 3. There is no tag, only prefixes. Therefore, every token is of length 1 and the suffix
+    ///    argument is of no consequence.
     fn try_new(suffix: bool, token: &str) -> Result<Self, ParsingError<String>> {
         if suffix {
             let count = token.chars().count();
@@ -241,10 +246,7 @@ impl<'a> InnerToken<'a> {
     ///   end (when suffix is false) of the token
     /// * `delimiter`: Indicates the char used to separate the Prefix from the rest of the tag
     #[inline(always)]
-    pub(super) fn try_new(
-        token: &'a str,
-        suffix: bool,
-    ) -> Result<Self, ParsingError<String>> {
+    pub(super) fn try_new(token: &'a str, suffix: bool) -> Result<Self, ParsingError<String>> {
         let prefix_index_struct = PrefixCharIndex::try_new(suffix, &token)?;
         let prefix_char_index = prefix_index_struct.to_index();
         let char_res = token.chars().nth(prefix_char_index);
@@ -252,20 +254,37 @@ impl<'a> InnerToken<'a> {
             Some(c) => UserPrefix::try_from(c)?,
             None => return Err(ParsingError::PrefixError(String::from(token))),
         };
-        let tag = match prefix_index_struct {
-            PrefixCharIndex::Start(_) => &token[2..],/* .chars().skip(2).collect::<Cow<str>>(), */
-            PrefixCharIndex::End(_, _count @ 1) => token.clone(),
+        if token.len() == 1 {
+            return Ok(Self {
+                token,
+                prefix,
+                tag: "_",
+            });
+        };
+        let mut tag = match prefix_index_struct {
+            PrefixCharIndex::Start(_) =>
+            // {
+            //     let offset: usize = token
+            //         .chars()
+            //         .enumerate()
+            //         .take_while(|(i, _)| i < &2)
+            //         .map(|(_, c)| size_of_val(&c))
+            //         .sum();
+            //     &token[offset..]
+            // }
+            {
+                &token[2..]
+            }
+            PrefixCharIndex::End(_, _count @ 1) => token,
             PrefixCharIndex::End(_, _count @ 2) => {
                 return Err(ParsingError::PrefixError(String::from(token)))
             }
-            PrefixCharIndex::End(_, count) => token
-                .chars()
-                .enumerate()
-                .take_while(|(i, _)| i < &(count - 2))
-                .map(|(_, c)| c)
-                .collect::<Cow<str>>(),
+            PrefixCharIndex::End(_, _count) => &token[0..token.len() - 2], // .chars()
+                                                                           // .enumerate()
+                                                                           // .take_while(|(i, _)| i < &(count - 2))
+                                                                           // .map(|(_, c)| c)
+                                                                           // .collect::<Cow<str>>(),
         };
-        let mut tag = tag;
         if tag.len() == 0 {
             tag = "_";
         }
@@ -550,14 +569,14 @@ impl<'a> Token<'a> {
             Self::BILOU { token } => token.check_patterns(prev, self.end_patterns()),
         }
     }
-    pub(super) fn take_tag(&mut self) -> Cow<'a, str> {
+    pub(super) fn take_tag(&mut self) -> &'a str {
         match self {
-            Self::IOB1 { token } => take(&mut token.tag),
-            Self::IOE1 { token } => take(&mut token.tag),
-            Self::IOB2 { token } => take(&mut token.tag),
-            Self::IOE2 { token } => take(&mut token.tag),
-            Self::IOBES { token } => take(&mut token.tag),
-            Self::BILOU { token } => take(&mut token.tag),
+            Self::IOB1 { token } => token.tag,
+            Self::IOE1 { token } => token.tag,
+            Self::IOB2 { token } => token.tag,
+            Self::IOE2 { token } => token.tag,
+            Self::IOBES { token } => token.tag,
+            Self::BILOU { token } => token.tag,
         }
     }
 }
@@ -568,7 +587,6 @@ mod test {
     use super::*;
     use enum_iterator::all;
     use quickcheck::{self, TestResult};
-    use unicode_segmentation::UnicodeSegmentation;
 
     impl quickcheck::Arbitrary for Prefix {
         fn arbitrary(g: &mut quickcheck::Gen) -> Self {
@@ -607,8 +625,8 @@ mod test {
             } else {
                 prefix.to_string() + &String::from(delimiter) + &tag
             };
-            let token = Cow::from(token_string);
-            dbg!(token.clone());
+            let token: &str = token_string.as_ref();
+            dbg!(token);
             let inner_token_res = InnerToken::try_new(token, suffix);
             match inner_token_res {
                 Err(err) => match err {
@@ -647,8 +665,8 @@ mod test {
             } else {
                 prefix.to_string() + &String::from(delimiter) + &tag
             };
-            let token = Cow::from(token_string);
-            dbg!(token.clone());
+            let token: &str = token_string.as_ref();
+            dbg!(token);
             let inner_token_res = InnerToken::try_new(token, suffix);
             match inner_token_res {
                 Err(err) => match err {
@@ -673,7 +691,7 @@ mod test {
 
     #[test]
     fn test_empty_token_return_err() {
-        let token = Cow::from("");
+        let token = "";
         let suffix = true;
         let res = InnerToken::try_new(token, suffix).is_err();
         assert!(res);
@@ -682,14 +700,14 @@ mod test {
     #[test]
     fn test_innertoken_new_with_suffix() {
         let tokens = vec![
-            (Cow::from("PER-I"), Cow::from("PER"), UserPrefix::I),
-            (Cow::from("PER-B"), Cow::from("PER"), UserPrefix::B),
-            (Cow::from("LOC-I"), Cow::from("LOC"), UserPrefix::I),
-            (Cow::from("O"), Cow::from("O"), UserPrefix::O),
+            ("PER-I", "PER", UserPrefix::I),
+            ("PER-B", "PER", UserPrefix::B),
+            ("LOC-I", "LOC", UserPrefix::I),
+            ("O", "O", UserPrefix::O),
         ];
         let suffix = true;
         for (i, (token, tag, prefix)) in tokens.into_iter().enumerate() {
-            let inner_token = InnerToken::try_new(token.clone(), suffix).unwrap();
+            let inner_token = InnerToken::try_new(token, suffix).unwrap();
             let expected_inner_token = InnerToken { token, prefix, tag };
             dbg!(i);
             assert_eq!(inner_token, expected_inner_token)
@@ -698,14 +716,14 @@ mod test {
     #[test]
     fn test_innertoken_new() {
         let tokens = vec![
-            (Cow::from("I-PER"), Cow::from("PER"), UserPrefix::I),
-            (Cow::from("B-PER"), Cow::from("PER"), UserPrefix::B),
-            (Cow::from("I-LOC"), Cow::from("LOC"), UserPrefix::I),
-            (Cow::from("O"), Cow::from("_"), UserPrefix::O),
+            ("I-PER", "PER", UserPrefix::I),
+            ("B-PER", "PER", UserPrefix::B),
+            ("I-LOC", "LOC", UserPrefix::I),
+            ("O", "_", UserPrefix::O),
         ];
         let suffix = false;
         for (i, (token, tag, prefix)) in tokens.into_iter().enumerate() {
-            let inner_token = InnerToken::try_new(token.clone(), suffix).unwrap();
+            let inner_token = InnerToken::try_new(token, suffix).unwrap();
             let expected_inner_token = InnerToken { token, prefix, tag };
             dbg!(i);
             assert_eq!(inner_token, expected_inner_token)
@@ -719,17 +737,6 @@ mod test {
         let all_prefixes: Vec<_> = all::<UserPrefix>().collect();
         for p in all_prefixes {
             let len = p.to_string().as_str().len();
-            assert_eq!(1, len);
-        }
-    }
-
-    #[test]
-    /// This function tests an implicit invariant used when building `Tokens` and `UnicodeIndex`:
-    /// The prefix must be composed of a single unicode character.
-    fn test_prefix_length() {
-        let all_prefixes: Vec<_> = all::<UserPrefix>().collect();
-        for p in all_prefixes {
-            let len = p.to_string().len();
             assert_eq!(1, len);
         }
     }

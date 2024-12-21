@@ -1,6 +1,6 @@
 use crate::entity::{schemes::SchemeType, InnerToken, UserPrefix};
 use ahash::AHashSet;
-use std::{borrow::Cow, error::Error, fmt::Display, sync::LazyLock};
+use std::{ error::Error, fmt::Display, sync::LazyLock};
 
 static ALLOWED_IOB2_PREFIXES: LazyLock<[AHashSet<UserPrefix>; 4]> = LazyLock::new(|| {
     [
@@ -117,7 +117,7 @@ impl SchemeType {
         let mut prefixes: AHashSet<UserPrefix> = AHashSet::default();
         for tokens in sequences {
             for token in tokens {
-                let tok = InnerToken::try_new(Cow::from(*token), suffix, );
+                let tok = InnerToken::try_new(*token, suffix, );
                 match tok {
                     Ok(p) => prefixes.insert(p.prefix),
                     Err(_) => continue,
