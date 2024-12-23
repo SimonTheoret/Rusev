@@ -19,7 +19,8 @@ pub use schemes::{InvalidToken, ParsingError, SchemeType};
 
 /// An entity represent a named objet in named entity recognition (NER). It contains a start and an
 /// end(i.e. at what index of the list does it starts and ends) and a tag, which the associated
-/// entity (such as `LOC`, `NAME`, `PER`, etc.)
+/// entity (such as `LOC`, `NAME`, `PER`, etc.). It is important to note that the `end` field
+/// differ based on the mode (i.e. strict vs lenient mode).
 #[derive(Debug, Hash, Clone, PartialEq, Eq, PartialOrd)]
 pub struct Entity<'a> {
     pub(crate) start: usize,
@@ -174,8 +175,7 @@ impl<'a> LenientChunkIter<'a> {
             (UserPrefix::I, UserPrefix::S) => true,
             (UserPrefix::I, UserPrefix::O) => true,
             (self_prefix, _) => {
-                !matches!(self_prefix, UserPrefix::O)
-                    && self.prev_type != wrapped_type
+                !matches!(self_prefix, UserPrefix::O) && self.prev_type != wrapped_type
             }
         }
     }
@@ -195,8 +195,7 @@ impl<'a> LenientChunkIter<'a> {
             (UserPrefix::O, UserPrefix::E) => true,
             (UserPrefix::O, UserPrefix::I) => true,
             (_, curr_prefix) => {
-                !matches!(curr_prefix, UserPrefix::O)
-                    && self.prev_type != wrapped_type
+                !matches!(curr_prefix, UserPrefix::O) && self.prev_type != wrapped_type
             }
         }
     }
@@ -921,10 +920,7 @@ pub(super) mod tests {
         let tokens = vec!["B-PER", "I-PER", "O", "B-LOC"];
         let seq = TokenVecs::new(vec![tokens.clone()]);
         let actual = get_entities_lenient(&seq, false).unwrap();
-        let entities = vec![
-            Entity::new(0, 1, "PER"),
-            Entity::new(3, 3, "LOC"),
-        ];
+        let entities = vec![Entity::new(0, 1, "PER"), Entity::new(3, 3, "LOC")];
         let expected_tokens = entities.into_boxed_slice();
         let expected_indices = Box::new([0, tokens.len()]);
         let expected_inner = TokenVecs {
@@ -935,16 +931,70 @@ pub(super) mod tests {
         assert_eq!(actual, expected)
     }
 
+    #[test]
+    fn test_get_entities_lenient_prefix() {
+        let y_true = vec![vec![
+            "O", "O", "O", "B-MISC", "I-MISC", "I-MISC", "O", "B-PER", "I-PER",
+        ]];
+        let y_true = TokenVecs::new(y_true);
+        let actual = get_entities_lenient(&y_true, false).unwrap();
+        assert_eq!(
+            actual
+                .0
+                .tokens
+                .iter()
+                .map(|e| e.as_tuple())
+                .collect::<Vec<_>>(),
+            Vec::from([(3, 5, "MISC"), (7, 8, "PER")])
+        )
+    }
+
+    #[test]
+    fn test_get_entities_lenient_suffix() {
+        let y_true = vec![vec![
+            "O", "O", "O", "MISC-B", "MISC-I", "MISC-I", "O", "PER-B", "PER-I",
+        ]];
+        let y_true = TokenVecs::new(y_true);
+        let actual = get_entities_lenient(&y_true, true).unwrap();
+        assert_eq!(
+            actual
+                .0
+                .tokens
+                .iter()
+                .map(|e| e.as_tuple())
+                .collect::<Vec<_>>(),
+            Vec::from([(3, 5, "MISC"), (7, 8, "PER")])
+        )
+    }
+
+    #[test]
+    #[allow(non_snake_case)]
+    fn test_get_entities_with_only_IOB() {
+        let y_true = vec![vec!["O", "O", "O", "B", "I", "I", "O"], vec!["B", "I", "O"]];
+        let y_true = TokenVecs::new(y_true);
+        let actual = get_entities_lenient(&y_true, true).unwrap();
+        assert_eq!(
+            actual
+                .0
+                .tokens
+                .iter()
+                .map(|e| e.as_tuple())
+                .collect::<Vec<_>>(),
+            Vec::from([(3, 5, "_"), (0, 1, "_")])
+        )
+    }
+    // def test_get_entities_with_only_IOB(self):
+    //     entities = get_entities(y_true)
+    //     self.assertEqual(entities, [('_', 3, 5), ('_', 8, 9)])
+
     #[allow(non_snake_case)]
     #[test]
     fn test_LenientChunkIterator() {
         let tokens = build_str_vec();
         let iter = LenientChunkIter::new(tokens.as_ref(), false);
         let actual = iter.collect::<Vec<_>>();
-        let expected: Vec<Result<Entity, ParsingError<String>>> = vec![
-            Ok(Entity::new(0, 1, "PER")),
-            Ok(Entity::new(3, 3, "LOC")),
-        ];
+        let expected: Vec<Result<Entity, ParsingError<String>>> =
+            vec![Ok(Entity::new(0, 1, "PER")), Ok(Entity::new(3, 3, "LOC"))];
         assert_eq!(actual, expected)
     }
 
