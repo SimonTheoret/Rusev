@@ -247,7 +247,7 @@ impl<'a> InnerToken<'a> {
     /// * `delimiter`: Indicates the char used to separate the Prefix from the rest of the tag
     #[inline(always)]
     pub(super) fn try_new(token: &'a str, suffix: bool) -> Result<Self, ParsingError<String>> {
-        let prefix_index_struct = PrefixCharIndex::try_new(suffix, &token)?;
+        let prefix_index_struct = PrefixCharIndex::try_new(suffix, token)?;
         let prefix_char_index = prefix_index_struct.to_index();
         let char_res = token.chars().nth(prefix_char_index);
         let prefix = match char_res {
@@ -280,7 +280,7 @@ impl<'a> InnerToken<'a> {
                 &token[0..offset]
             }
         };
-        if tag.len() == 0 {
+        if tag.is_empty() {
             tag = "_";
         }
         Ok(Self { token, prefix, tag })

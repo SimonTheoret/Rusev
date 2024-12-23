@@ -117,7 +117,7 @@ impl SchemeType {
         let mut prefixes: AHashSet<UserPrefix> = AHashSet::default();
         for tokens in sequences {
             for token in tokens {
-                let tok = InnerToken::try_new(*token, suffix, );
+                let tok = InnerToken::try_new(token, suffix, );
                 match tok {
                     Ok(p) => prefixes.insert(p.prefix),
                     Err(_) => continue,

@@ -137,10 +137,10 @@ impl<'a> Iterator for LenientChunkIter<'a> {
                 }
             };
             let ret: Option<Self::Item>;
-            if self.end_of_chunk(&inner_token.prefix, &inner_token.tag) {
+            if self.end_of_chunk(&inner_token.prefix, inner_token.tag) {
                 ret = Some(Ok(Entity::new(
                     self.begin_offset,
-                    self.index - 1,
+                    self.index,
                     self.prev_type.unwrap(),
                 )));
                 self.prev_prefix = inner_token.prefix;
@@ -148,7 +148,7 @@ impl<'a> Iterator for LenientChunkIter<'a> {
                 self.index += 1;
                 return ret;
             };
-            if self.start_of_chunk(&inner_token.prefix, &inner_token.tag) {
+            if self.start_of_chunk(&inner_token.prefix, inner_token.tag) {
                 self.begin_offset = self.index;
             };
             self.prev_prefix = inner_token.prefix;
@@ -920,7 +920,7 @@ pub(super) mod tests {
         let tokens = vec!["B-PER", "I-PER", "O", "B-LOC"];
         let seq = TokenVecs::new(vec![tokens.clone()]);
         let actual = get_entities_lenient(&seq, false).unwrap();
-        let entities = vec![Entity::new(0, 1, "PER"), Entity::new(3, 3, "LOC")];
+        let entities = vec![Entity::new(0, 2, "PER"), Entity::new(3, 4, "LOC")];
         let expected_tokens = entities.into_boxed_slice();
         let expected_indices = Box::new([0, tokens.len()]);
         let expected_inner = TokenVecs {
@@ -945,7 +945,7 @@ pub(super) mod tests {
                 .iter()
                 .map(|e| e.as_tuple())
                 .collect::<Vec<_>>(),
-            Vec::from([(3, 5, "MISC"), (7, 8, "PER")])
+            Vec::from([(3, 6, "MISC"), (7, 9, "PER")])
         )
     }
 
@@ -963,7 +963,7 @@ pub(super) mod tests {
                 .iter()
                 .map(|e| e.as_tuple())
                 .collect::<Vec<_>>(),
-            Vec::from([(3, 5, "MISC"), (7, 8, "PER")])
+            Vec::from([(3, 6, "MISC"), (7, 9, "PER")])
         )
     }
 
@@ -980,12 +980,9 @@ pub(super) mod tests {
                 .iter()
                 .map(|e| e.as_tuple())
                 .collect::<Vec<_>>(),
-            Vec::from([(3, 5, "_"), (0, 1, "_")])
+            Vec::from([(3, 6, "_"), (0, 2, "_")])
         )
     }
-    // def test_get_entities_with_only_IOB(self):
-    //     entities = get_entities(y_true)
-    //     self.assertEqual(entities, [('_', 3, 5), ('_', 8, 9)])
 
     #[allow(non_snake_case)]
     #[test]
@@ -994,31 +991,31 @@ pub(super) mod tests {
         let iter = LenientChunkIter::new(tokens.as_ref(), false);
         let actual = iter.collect::<Vec<_>>();
         let expected: Vec<Result<Entity, ParsingError<String>>> =
-            vec![Ok(Entity::new(0, 1, "PER")), Ok(Entity::new(3, 3, "LOC"))];
+            vec![Ok(Entity::new(0, 2, "PER")), Ok(Entity::new(3, 4, "LOC"))];
         assert_eq!(actual, expected)
     }
 
     #[test]
-    fn test_get_entities() {
+    fn test_get_entities_lenient_2() {
         let seq = vec![vec![
             "O", "O", "O", "B-MISC", "I-MISC", "I-MISC", "O", "B-PER", "I-PER",
         ]];
         let binding = &seq.into();
         let binding2 = get_entities_lenient(binding, false).unwrap();
         let actual = binding2.0.iter().map(|e| e.as_tuple()).collect::<Vec<_>>();
-        let expected: Vec<(usize, usize, &str)> = vec![(3, 5, "MISC"), (7, 8, "PER")];
+        let expected: Vec<(usize, usize, &str)> = vec![(3, 6, "MISC"), (7, 9, "PER")];
         assert_eq!(expected, actual)
     }
 
     #[test]
-    fn test_get_entities_with_suffix() {
+    fn test_get_entities_lenient_with_suffix() {
         let seq = vec![vec![
             "O", "O", "O", "MISC-B", "MISC-I", "MISC-I", "O", "PER-B", "PER-I",
         ]];
         let binding = &seq.into();
         let binding2 = get_entities_lenient(binding, true).unwrap();
         let actual = binding2.0.iter().map(|e| e.as_tuple()).collect::<Vec<_>>();
-        let expected: Vec<(usize, usize, &str)> = vec![(3, 5, "MISC"), (7, 8, "PER")];
+        let expected: Vec<(usize, usize, &str)> = vec![(3, 6, "MISC"), (7, 9, "PER")];
         assert_eq!(expected, actual)
     }
 
