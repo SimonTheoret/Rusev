@@ -182,6 +182,7 @@ enum Tag {
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]
+/// Inner structure used to define what a token is.
 pub(super) struct InnerToken<'a> {
     /// The full token, such as `"B-PER"`, `"I-LOC"`, etc.
     pub(super) token: &'a str,

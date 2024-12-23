@@ -20,7 +20,7 @@ pub use schemes::{InvalidToken, ParsingError, SchemeType};
 /// An entity represent a named objet in named entity recognition (NER). It contains a start and an
 /// end(i.e. at what index of the list does it starts and ends) and a tag, which the associated
 /// entity (such as `LOC`, `NAME`, `PER`, etc.). It is important to note that the `end` field
-/// differ based on the mode (i.e. strict vs lenient mode).
+/// differ from the value used in SeqEval when `strict = false`.
 #[derive(Debug, Hash, Clone, PartialEq, Eq, PartialOrd)]
 pub struct Entity<'a> {
     pub(crate) start: usize,
@@ -85,14 +85,16 @@ impl<'a> Iterator for InnerLenientChunkIter<'a> {
         let next_value = self.content.next();
         if next_value.is_none() {
             match self.is_at_end {
+                // End of iteration
                 true => None,
+                // Reached end of iterator. Need to add a `"O"` at the end
                 false => {
                     self.is_at_end = true;
                     Some("O")
                 }
             }
         } else {
-            next_value.map(|v| &**v)
+            next_value.map(|v| *v)
         }
     }
 }
@@ -147,8 +149,7 @@ impl<'a> Iterator for LenientChunkIter<'a> {
                 self.prev_type = Some(inner_token.tag);
                 self.index += 1;
                 return ret;
-            };
-            if self.start_of_chunk(&inner_token.prefix, inner_token.tag) {
+            } else if self.start_of_chunk(&inner_token.prefix, inner_token.tag) {
                 self.begin_offset = self.index;
             };
             self.prev_prefix = inner_token.prefix;
@@ -180,7 +181,7 @@ impl<'a> LenientChunkIter<'a> {
         }
     }
 
-    ///     """Checks if a chunk started between the previous and current word.
+    /// Checks if a chunk started between the previous and current word.
     #[inline(always)]
     fn start_of_chunk(&self, current_prefix: &UserPrefix, current_type: &'a str) -> bool {
         let wrapped_type = Some(current_type);

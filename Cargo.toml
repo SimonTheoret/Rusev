@@ -48,8 +48,19 @@ pprof = { version = "0.14.0", features = ["criterion", "flamegraph"] }
 name = "classification_report_full"
 harness = false
 
+# These two benchmarks have been deprecated in favor of the
+# classification_report_fast_full, which is the union of the two benchmarks
+# below.
+# [[bench]]
+# name = "classification_report_fast_lenient"
+# harness = false
+#
+# [[bench]]
+# name = "classification_report_fast_strict"
+# harness = false
+
 [[bench]]
-name = "classification_report_fast"
+name = "classification_report_fast_full"
 harness = false
 
 [[bench]]

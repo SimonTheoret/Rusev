@@ -48,10 +48,9 @@ fn build_vecs(path: &'static str) -> (Vec<Vec<&'static str>>, Vec<Vec<&'static s
     return (true_vec, pred_vec);
 }
 
-
-fn benchmark_full_lenient_dataset(c: &mut Criterion) {
-    let (true_vec, pred_vec) = build_vecs("./data/datasets/full_dataset.jsonl");
-    c.bench_function("full_dataset_lenient_report", |b| {
+fn benchmark_small_lenient_dataset(c: &mut Criterion) {
+    let (true_vec, pred_vec) = build_vecs("./data/datasets/small_dataset.jsonl");
+    c.bench_function("small_dataset_lenient_report", |b| {
         b.iter(|| {
             classification_report(
                 true_vec.clone(),
@@ -60,16 +59,17 @@ fn benchmark_full_lenient_dataset(c: &mut Criterion) {
                 rusev::DivByZeroStrat::ReplaceBy0,
                 rusev::SchemeType::IOB2,
                 false,
-                true,
+                false,
                 false,
             )
             .unwrap()
         })
     });
 }
-fn benchmark_full_strict_dataset(c: &mut Criterion) {
-    let (true_vec, pred_vec) = build_vecs("./data/datasets/full_dataset.jsonl");
-    c.bench_function("full_dataset_strict_report", |b| {
+
+fn benchmark_huge_lenient_dataset(c: &mut Criterion) {
+    let (true_vec, pred_vec) = build_vecs("./data/datasets/huge_dataset.jsonl");
+    c.bench_function("huge_dataset_lenient_report", |b| {
         b.iter(|| {
             classification_report(
                 true_vec.clone(),
@@ -78,8 +78,26 @@ fn benchmark_full_strict_dataset(c: &mut Criterion) {
                 rusev::DivByZeroStrat::ReplaceBy0,
                 rusev::SchemeType::IOB2,
                 false,
-                true,
-                true,
+                false,
+                false,
+            )
+            .unwrap()
+        })
+    });
+}
+fn benchmark_big_lenient_dataset(c: &mut Criterion) {
+    let (true_vec, pred_vec) = build_vecs("./data/datasets/big_dataset.jsonl");
+    c.bench_function("big_dataset_lenient_report", |b| {
+        b.iter(|| {
+            classification_report(
+                true_vec.clone(),
+                pred_vec.clone(),
+                None,
+                rusev::DivByZeroStrat::ReplaceBy0,
+                rusev::SchemeType::IOB2,
+                false,
+                false,
+                false,
             )
             .unwrap()
         })
@@ -87,10 +105,10 @@ fn benchmark_full_strict_dataset(c: &mut Criterion) {
 }
 
 criterion_group!(
-    name=long_report_benches;
-    config = Criterion::default().sample_size(100).with_profiler(PProfProfiler::new(3000, Output::Flamegraph(None)));
-    targets =
-    benchmark_full_strict_dataset,
-    benchmark_full_lenient_dataset,
+    name=fast_report_benches;
+    config = Criterion::default().sample_size(250).with_profiler(PProfProfiler::new(3000, Output::Flamegraph(None)));
+    targets = benchmark_small_lenient_dataset,
+    benchmark_big_lenient_dataset,
+    benchmark_huge_lenient_dataset
 );
-criterion_main!(long_report_benches);
+criterion_main!(fast_report_benches);
