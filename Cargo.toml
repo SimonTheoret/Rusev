@@ -21,7 +21,7 @@ license-file = "UNLICENCE"
 repository = "https://github.com/SimonTheoret/rusev"
 keywords = ["Machine Learning", "SeqEval", "Sequence Evaluation", "NLP", "Evaluation", "NER"]
 categories = ["science", "text-processing", "mathematics"]
-rust-version = "1.70"
+rust-version = "1.80.1"
 
 [lib]
 # path = "src/lib.rs"
