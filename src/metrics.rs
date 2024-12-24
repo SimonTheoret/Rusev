@@ -223,8 +223,8 @@ fn extract_tp_actual_correct_strict<'a>(
     let (entities_true_res, entities_pred_res) = match entities_true_and_pred {
         Some((e1, e2)) => (e1, e2),
         None => (
-            &Entities::try_from_vecs_strict(y_true, scheme, suffix)?,
-            &Entities::try_from_vecs_strict(y_pred, scheme, suffix)?,
+            &Entities::try_from_strict(y_true, scheme, suffix)?,
+            &Entities::try_from_strict(y_pred, scheme, suffix)?,
         ),
     };
     let entities_pred_unique_tags = entities_pred_res.unique_tags();
@@ -697,12 +697,12 @@ pub fn classification_report<'a>(
     let mut y_pred_struct = TokenVecs::from(y_pred);
     let sample_weight_array = sample_weight.map(ArcArray::from_vec);
     let entities_true = if strict {
-        Entities::try_from_vecs_strict(&mut y_true_struct, scheme, suffix)?
+        Entities::try_from_strict(&mut y_true_struct, scheme, suffix)?
     } else {
         get_entities_lenient(&y_true_struct, suffix)?
     };
     let entities_pred = if strict {
-        Entities::try_from_vecs_strict(&mut y_pred_struct, scheme, suffix)?
+        Entities::try_from_strict(&mut y_pred_struct, scheme, suffix)?
     } else {
         get_entities_lenient(&y_pred_struct, suffix)?
     };

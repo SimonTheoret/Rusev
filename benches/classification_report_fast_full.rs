@@ -4,6 +4,7 @@ use rusev::classification_report;
 use serde::Deserialize;
 use serde_jsonlines::json_lines;
 use std::path::Path;
+use std::time::Duration;
 
 #[derive(Deserialize)]
 struct Example {
@@ -162,7 +163,7 @@ fn benchmark_big_dataset_strict(c: &mut Criterion) {
 
 criterion_group!(
     name=fast_report_benches;
-    config = Criterion::default().sample_size(250).with_profiler(PProfProfiler::new(3000, Output::Flamegraph(None)));
+    config = Criterion::default().sample_size(250).with_profiler(PProfProfiler::new(3000, Output::Flamegraph(None))).measurement_time(Duration::from_secs(10));
     targets =
     benchmark_small_dataset_lenient,
     benchmark_big_dataset_lenient,

@@ -536,7 +536,7 @@ impl<'a> Entities<'a> {
 ///    (ex: `I-PER`, where the tag is `PER` and the prefix is `I`)
 pub(crate) trait TryFromVecStrict<'a> {
     type Error: Error;
-    fn try_from_vecs_strict(
+    fn try_from_strict(
         tokens: &'a mut TokenVecs<&'a str>,
         scheme: SchemeType,
         suffix: bool,
@@ -546,7 +546,7 @@ pub(crate) trait TryFromVecStrict<'a> {
 impl<'a> TryFromVecStrict<'a> for Entities<'a> {
     type Error = ConversionError<String>;
     #[inline(always)]
-    fn try_from_vecs_strict(
+    fn try_from_strict(
         vec_of_tokens_2d: &'a mut TokenVecs<&'a str>,
         scheme: SchemeType,
         suffix: bool,
@@ -556,7 +556,7 @@ impl<'a> TryFromVecStrict<'a> for Entities<'a> {
         let mut_iter = UnsafeCell::new(vec_of_tokens_2d.iter_vec_mut());
         loop {
             let current = unsafe { &mut *mut_iter.get() };
-            let current_next = current.custom_next();
+            let current_next = current.next();
             if current_next.is_none() {
                 let res: Result<Vec<Vec<Entity>>, _> = tokens
                     .into_iter()
@@ -634,7 +634,7 @@ pub(super) mod tests {
         ];
         let mut vec_of_tokens_2d = TokenVecs::new(vec_of_tokens);
         let entities =
-            Entities::try_from_vecs_strict(&mut vec_of_tokens_2d, SchemeType::IOB2, false).unwrap();
+            Entities::try_from_strict(&mut vec_of_tokens_2d, SchemeType::IOB2, false).unwrap();
         assert_eq!(
             entities.tokens,
             vec![
@@ -711,8 +711,7 @@ pub(super) mod tests {
                     .map(|v| v.into_iter().map(|t| t.into()).collect())
                     .collect(),
             );
-            let entities =
-                Entities::try_from_vecs_strict(&mut tok, SchemeType::IOB2, false).unwrap();
+            let entities = Entities::try_from_strict(&mut tok, SchemeType::IOB2, false).unwrap();
             for entity in entities.iter() {
                 let diff = entity.end - entity.start;
                 if diff != 1 {
@@ -909,8 +908,7 @@ pub(super) mod tests {
     #[test]
     fn test_unique_tags() {
         let mut sequences = TokenVecs::new(vec![build_str_vec(), build_str_vec_diff()]);
-        let entities =
-            Entities::try_from_vecs_strict(&mut sequences, SchemeType::IOB2, false).unwrap();
+        let entities = Entities::try_from_strict(&mut sequences, SchemeType::IOB2, false).unwrap();
         let actual_unique_tags = entities.unique_tags();
         let expected_unique_tags: AHashSet<&str> = AHashSet::from_iter(vec!["PER", "LOC", "GEO"]);
         assert_eq!(actual_unique_tags, expected_unique_tags);

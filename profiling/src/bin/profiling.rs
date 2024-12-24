@@ -97,7 +97,7 @@ fn main() {
     };
     let mut total_duration = Duration::ZERO;
     let path = format!("./data/datasets/{}_dataset.jsonl", args.dataset);
-    for _ in iter {
+    for _ in iter.clone() {
         let (true_vec, pred_vec) = build_vecs(&path);
         let now = Instant::now();
         {
@@ -117,7 +117,30 @@ fn main() {
         total_duration += elapsed;
     }
     println!(
-        "Total duration: {} with {n_samples} samples",
+        "Total duration: {} with {n_samples} samples in strict mode ",
+        total_duration.as_secs_f64()
+    );
+    for _ in iter {
+        let (true_vec, pred_vec) = build_vecs(&path);
+        let now = Instant::now();
+        {
+            classification_report(
+                true_vec,
+                pred_vec,
+                None,
+                rusev::DivByZeroStrat::ReplaceBy0,
+                rusev::SchemeType::IOB2,
+                false,
+                false,
+                false,
+            )
+            .unwrap();
+        }
+        let elapsed = now.elapsed();
+        total_duration += elapsed;
+    }
+    println!(
+        "Total duration: {} with {n_samples} samples in lenient mode",
         total_duration.as_secs_f64()
     )
 }

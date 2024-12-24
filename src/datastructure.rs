@@ -133,7 +133,29 @@ impl<'a, T> VecsIterMut<'a, T> {
         }
     }
 }
+
+impl<'a, T> Iterator for VecsIterMut<'a, T> {
+    type Item = &'a mut [T];
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.counter >= self.token_vecs.indices.len() - 1 {
+            return None;
+        }
+        let start = unsafe { *self.token_vecs.indices.get_unchecked(self.indice_index) };
+        let end = unsafe { *self.token_vecs.indices.get_unchecked(self.indice_index + 1) };
+        self.counter += 1;
+        self.indice_index += 1;
+        self.token_vecs
+            .tokens
+            .get_mut(start..end)
+            .map(|r| unsafe {&mut * (r as *mut [T])})
+    }
+}
+
 impl<'a, T> VecsIterMut<'a, T> {
+    /// This function act as the `next` method of an `Iterator`. It does not implements the
+    /// `Iterator` trait due to the difference in the function signature.
+    // #[inline]
+    // TODO: inline this and bench perf diff
     pub(crate) fn custom_next<'b: 'a>(&'b mut self) -> Option<&'a mut [T]> {
         if self.counter >= self.token_vecs.indices.len() - 1 {
             return None;

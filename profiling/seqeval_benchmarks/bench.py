@@ -1,7 +1,10 @@
 from dataclasses import dataclass
 from argparse import ArgumentParser
 from time import time
-from seqeval.metrics.v1 import classification_report
+from seqeval.metrics.v1 import classification_report as classification_report_strict
+from seqeval.metrics.sequence_labeling import (
+    classification_report as classification_report_lenient,
+)
 from seqeval.scheme import IOB2
 from typing import Self
 import jsonlines
@@ -36,7 +39,7 @@ def main(n_samples: int, dataset: str):
     for _ in range(n_samples):
         true_list, pred_list = build_lists(path)
         now = time()
-        classification_report(
+        classification_report_strict(
             y_true=true_list,
             y_pred=pred_list,
             sample_weight=None,
@@ -48,7 +51,24 @@ def main(n_samples: int, dataset: str):
         )
         elapsed = time() - now
         total_duration += elapsed
-    print(f"Total duration: {total_duration} with {n_samples} samples")
+    print(f"Total duration: {total_duration} with {n_samples} samples in strict mode")
+
+    for _ in range(n_samples):
+        true_list, pred_list = build_lists(path)
+        now = time()
+        classification_report_lenient(
+            y_true=true_list,
+            y_pred=pred_list,
+            sample_weight=None,
+            digits=2,
+            output_dict=False,
+            zero_division=0,
+            suffix=False,
+            scheme=IOB2,
+        )
+        elapsed = time() - now
+        total_duration += elapsed
+    print(f"Total duration: {total_duration} with {n_samples} samples in lenient mode")
 
 
 if __name__ == "__main__":
