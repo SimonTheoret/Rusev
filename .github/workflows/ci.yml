@@ -61,7 +61,7 @@ jobs:
 
   check-mutations:
     runs-on: ubuntu-18.04
-    needs: test
+    needs: build_and_testtest
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -78,7 +78,7 @@ jobs:
 
   lint-rust:
     runs-on: ubuntu-18.04
-    needs: test
+    needs: build_and_test
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -98,7 +98,7 @@ jobs:
 
   lint-generic:
     runs-on: ubuntu-18.04
-    needs: test
+    needs: build_and_test
     steps:
       - name: Checkout
         uses: actions/checkout@v2
