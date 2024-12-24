@@ -48,7 +48,6 @@ fn build_vecs(path: &'static str) -> (Vec<Vec<&'static str>>, Vec<Vec<&'static s
     return (true_vec, pred_vec);
 }
 
-
 fn benchmark_full_lenient_dataset(c: &mut Criterion) {
     let (true_vec, pred_vec) = build_vecs("./data/datasets/full_dataset.jsonl");
     c.bench_function("full_dataset_lenient_report", |b| {

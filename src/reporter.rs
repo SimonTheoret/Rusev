@@ -47,14 +47,9 @@ pub struct Reporter {
 /// prettypriting it, this is not a problem.
 impl From<Reporter> for HashSet<ClassMetrics> {
     fn from(value: Reporter) -> Self {
-        value
-            .classes
-            .into_iter()
-            .map( ClassMetrics::from)
-            .collect()
+        value.classes.into_iter().map(ClassMetrics::from).collect()
     }
 }
-
 
 impl Reporter {
     pub(crate) fn insert(&mut self, metrics: ClassMetricsInner) -> bool {

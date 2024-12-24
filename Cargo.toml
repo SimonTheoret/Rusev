@@ -9,7 +9,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [workspace]
-members = [".", "rusev_macro", "profiling"]
+members = [".", "profiling"]
 
 [workspace.package]
 version = "0.1.0"
@@ -25,8 +25,6 @@ categories = ["science", "text-processing", "mathematics"]
 # path = "src/lib.rs"
 
 [dependencies]
-unicode-segmentation = "1.12.0"
-rusev_macro = {path = "./rusev_macro"}
 ndarray = { version = "0.16.1", features = ["serde", "rayon", "blas"] }
 num = "0.4.3"
 ahash = "0.8.11"
@@ -37,9 +35,7 @@ enum-iterator = "2.1.0"
 either = "1.13.0"
 
 [dev-dependencies]
-parameterized = "2.0.0"
 quickcheck = "1.0.3"
-quickcheck_macros = "1.0.0"
 criterion = { version = "0.5", features = ["html_reports"] }
 serde-jsonlines = "0.6.0"
 pprof = { version = "0.14.0", features = ["criterion", "flamegraph"] }

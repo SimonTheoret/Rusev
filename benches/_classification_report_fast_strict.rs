@@ -112,4 +112,3 @@ criterion_group!(
     benchmark_huge_strict_dataset
 );
 criterion_main!(fast_report_benches);
-

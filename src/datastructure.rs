@@ -103,6 +103,8 @@ impl<'a, T> VecsIter<'a, T> {
 }
 impl<'a, T> Iterator for VecsIter<'a, T> {
     type Item = &'a [T];
+    // NOTE: Inlining this function seems to reduce the performance
+    // #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         if self.token_vecs.indices.len() == 0 || self.counter >= self.token_vecs.indices.len() - 1 {
             return None;
@@ -135,6 +137,8 @@ impl<'a, T> VecsIterMut<'a, T> {
 
 impl<'a, T> Iterator for VecsIterMut<'a, T> {
     type Item = &'a mut [T];
+    // NOTE: Inlining this function seems to reduce the performance
+    // #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
         if self.counter >= self.token_vecs.indices.len() - 1 {
             return None;
