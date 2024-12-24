@@ -198,3 +198,21 @@ where
         RusevConfig::from(self)
     }
 }
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn test_builder_setters_division_by_zero() {
+        let builder = RusevConfigBuilder::default();
+        let samples = vec![0.3, 0.1, -100.];
+        let config = builder.sample_weights(samples.clone()).build();
+        assert_eq!(config.sample_weights.unwrap(), samples)
+    }
+    #[test]
+    fn test_builder_setters_samples() {
+        let builder = RusevConfigBuilder::default();
+        let samples = vec![0.3, 0.1, -100.];
+        let config = builder.sample_weights(samples.clone()).build();
+        assert_eq!(config.sample_weights.unwrap(), samples)
+    }
+}
