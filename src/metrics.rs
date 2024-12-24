@@ -66,7 +66,7 @@ impl<F: Clone, T: Data<Elem = F>> ItemArrayExt<F> for ArrayBase<T, Dim<[usize; 1
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// How do we handle cases with a division by zero? Do we replace the denominator by 1, return an
 /// error, or replace the division result with 0? SeqEval uses by default the `ReplaceBy0`
 /// strategy. It is not recommended to use the ReturnError; it will stop the computation. It can be
@@ -282,10 +282,6 @@ fn extract_tp_actual_correct_lenient<'a>(
             }
         }
     }
-    // let entities_pred_tmp = match entities_pred {
-    //     Some(v) => v,
-    //     None => &get_entities_lenient(y_pred.as_ref(), suffix,  )?,
-    // };
     let mut entities_pred_init: AHashMap<&str, AHashSet<(usize, usize)>> = AHashMap::default();
     for e in entities_pred_tmp.iter() {
         let (start, end) = (e.start, e.end);

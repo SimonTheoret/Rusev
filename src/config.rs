@@ -201,18 +201,64 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    #[test]
-    fn test_builder_setters_division_by_zero() {
+    use rstest::rstest;
+
+    #[rstest]
+    #[case(DivByZeroStrat::ReplaceBy1)]
+    #[case(DivByZeroStrat::ReplaceBy0)]
+    #[case(DivByZeroStrat::ReturnError)]
+    fn test_builder_setters_division_by_zero(#[case] strat: DivByZeroStrat) {
         let builder = RusevConfigBuilder::default();
-        let samples = vec![0.3, 0.1, -100.];
-        let config = builder.sample_weights(samples.clone()).build();
-        assert_eq!(config.sample_weights.unwrap(), samples)
+        let div_by_zero = strat;
+        let config = builder.division_by_zero(div_by_zero).build();
+        assert_eq!(config.zero_division, div_by_zero)
     }
+
     #[test]
     fn test_builder_setters_samples() {
         let builder = RusevConfigBuilder::default();
         let samples = vec![0.3, 0.1, -100.];
         let config = builder.sample_weights(samples.clone()).build();
         assert_eq!(config.sample_weights.unwrap(), samples)
+    }
+
+    #[rstest]
+    #[case(SchemeType::IOE1)]
+    #[case(SchemeType::IOE2)]
+    #[case(SchemeType::IOB1)]
+    #[case(SchemeType::IOB2)]
+    #[case(SchemeType::BILOU)]
+    #[case(SchemeType::IOBES)]
+    fn test_builder_setters_scheme(#[case] scheme: SchemeType) {
+        let builder = RusevConfigBuilder::default();
+        let config = builder.scheme(scheme).build();
+        assert_eq!(config.scheme, Some(scheme))
+    }
+
+    #[rstest]
+    #[case(true)]
+    #[case(false)]
+    fn test_builder_setters_parallel(#[case] parallel: bool) {
+        let builder = RusevConfigBuilder::default();
+        let config = builder.parallel(parallel).build();
+        assert_eq!(config.parallel, parallel)
+    }
+
+    #[rstest]
+    #[case(true)]
+    #[case(false)]
+    fn test_builder_setters_strict(#[case] strict: bool) {
+        let builder = RusevConfigBuilder::default();
+        let config = builder.strict(strict).build();
+        assert_eq!(config.strict, strict)
+    }
+
+    #[rstest]
+    #[case(true)]
+    #[case(false)]
+    fn test_builder_setters_suffix(#[case] suffix: bool) {
+        let builder = RusevConfigBuilder::default();
+        let config = builder.suffix(suffix).build();
+        assert_eq!(config.suffix, suffix)
     }
 }
