@@ -1,5 +1,6 @@
 [package]
 name = "rusev"
+rust-version.workspace = true
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -20,6 +21,7 @@ license-file = "UNLICENCE"
 repository = "https://github.com/SimonTheoret/rusev"
 keywords = ["Machine Learning", "SeqEval", "Sequence Evaluation", "NLP", "Evaluation", "NER"]
 categories = ["science", "text-processing", "mathematics"]
+rust-version = "1.70"
 
 [lib]
 # path = "src/lib.rs"
