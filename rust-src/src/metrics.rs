@@ -773,6 +773,7 @@ mod tests {
     pub trait CloseEnough {
         fn are_close(&self, other: &Self, eps: f32) -> bool;
     }
+
     // ClassMetrics does not have the default PartialEq implementation.
     impl CloseEnough for ClassMetricsInner {
         fn are_close(&self, other: &Self, eps: f32) -> bool {

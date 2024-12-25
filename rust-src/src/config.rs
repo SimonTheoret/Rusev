@@ -91,15 +91,13 @@ where
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 /// Config struct used to simplify the imputs of parameters to the main functions of `Rusev`. It
-/// implements the default trait.
+/// Implements the default trait.
 pub struct RusevConfig<Samples, ZeroDiv, Scheme>
 where
     Samples: Into<Option<Vec<f32>>>,
     ZeroDiv: Into<DivByZeroStrat>,
     Scheme: Into<SchemeType>,
 {
-    // y_true: Input,
-    // y_pred: Input,
     sample_weights: Option<Samples>,
     zero_division: ZeroDiv,
     scheme: Option<Scheme>,

@@ -81,7 +81,8 @@ impl Display for Reporter {
     }
 }
 
-/// Public datastructure holding metrics about a given class.
+#[derive(Debug)]
+/// Datastructure holding metrics about a given class.
 pub struct ClassMetrics {
     /// The class, such as "PER", "GEO", "MISC", etc.
     pub class: String,
