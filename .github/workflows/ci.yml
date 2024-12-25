@@ -20,8 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
-      - run: cargo build --verbose
-      - run: cargo test --verbose
+      - run: cargo build --verbose --manifest-path rusev/Cargo.toml
+      - run: cargo test --verbose --manifest-path rusev/Cargo.toml
 
   latest_deps:
     name: Latest Dependencies
@@ -30,16 +30,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup update stable && rustup default stable
-      - run: cargo update --verbose
-      - run: cargo build --verbose
-      - run: cargo test --verbose
+      - run: cargo update --verbose  --manifest-path rusev/Cargo.toml
+      - run: cargo build --verbose --manifest-path rusev/Cargo.toml 
+      - run: cargo test --verbose --manifest-path rusev/Cargo.toml 
 
   msrv:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: taiki-e/install-action@cargo-hack
-      - run: cargo hack check --rust-version --workspace --all-targets --ignore-private
+      - run: cargo hack check --rust-version --workspace --all-targets --ignore-private --manifest-path rusev/Cargo.toml
 
   coverage:
     runs-on: ubuntu-latest
@@ -52,7 +52,7 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Generate code coverage
-        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+        run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info --manifest-path rusev/Cargo.toml
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
@@ -91,9 +91,9 @@ jobs:
           components: rustfmt, clippy
           override: true
       - name: Run clippy
-        run: cargo clippy --all-targets -- -D warnings $(cat .lints | cut -f1 -d"#" | tr '\n' ' ')
+        run: cargo clippy --all-targets -- -D warnings $(cat .lints | cut -f1 -d"#" | tr '\n' ' ') --manifest-path rusev/Cargo.toml
       - name: Run rustfmt
-        run: cargo fmt -- --check
+        run: cargo fmt -- --check --manifest-path rusev/Cargo.toml
       - name: Run cargo-deny
         uses: EmbarkStudios/cargo-deny-action@v1
 
