@@ -94,10 +94,7 @@ jobs:
         - run: rustup component add clippy
         - uses: actions-rs/clippy-check@v1
 
-on: pull_request
-
   name: Rustfmt
-
   jobs:
     format:
       runs-on: ubuntu-latest
@@ -109,6 +106,3 @@ on: pull_request
           with:
             components: rustfmt
         - uses: mbrobbel/rustfmt-check@master
-          with:
-            token: ${{ secrets.GITHUB_TOKEN }}
-            mode: review
