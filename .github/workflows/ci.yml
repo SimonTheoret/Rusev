@@ -60,16 +60,14 @@ jobs:
           files: lcov.info
           fail_ci_if_error: true
 
-  name: Rustfmt
-  jobs:
-    format:
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
-          with:
-            components: rustfmt
-        - uses: mbrobbel/rustfmt-check@master
+  Rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: mbrobbel/rustfmt-check@master
 
   lint-generic:
     runs-on: ubuntu-18.04
@@ -85,24 +83,21 @@ jobs:
         run: bash .github/workflows/scripts/check_line_endings.sh
       - name: Check TODOs
         run: bash .github/workflows/scripts/check_todos.sh
-  name: Clippy check
-  jobs:
-    clippy_check:
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v1
-        - run: rustup component add clippy
-        - uses: actions-rs/clippy-check@v1
 
-  name: Rustfmt
-  jobs:
-    format:
-      runs-on: ubuntu-latest
-      permissions:
-        pull-requests: write
-      steps:
-        - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@nightly
-          with:
-            components: rustfmt
-        - uses: mbrobbel/rustfmt-check@master
+  Clippy check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - run: rustup component add clippy
+      - uses: actions-rs/clippy-check@v1
+
+  Rustfmt:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - uses: mbrobbel/rustfmt-check@master
