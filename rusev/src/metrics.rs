@@ -459,13 +459,13 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
     average: Average,
     sample_weight: Option<ArcArray<f32, Dim<[usize; 1]>>>,
     zero_division: DivByZeroStrat,
-    scheme: SchemeType,
+    scheme: Option<SchemeType>,
     suffix: bool,
     parallel: bool,
-    strict: bool,
 ) -> Result<PrecisionRecallFScoreTrueSum, ComputationError<String>> {
     let mut y_true_struct = TokenVecs::new(y_true);
     let mut y_pred_struct = TokenVecs::new(y_pred);
+    let strict = scheme.is_some();
     precision_recall_fscore_support_inner(
         &mut y_true_struct,
         &mut y_pred_struct,
@@ -473,7 +473,7 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
         average,
         sample_weight,
         zero_division,
-        scheme,
+        scheme.unwrap_or_default(),
         suffix,
         parallel,
         None,
@@ -675,30 +675,28 @@ fn par_replace<Data: PartialEq + Send + Sync + Copy, D: Dimension>(
 /// * `zero_division`: What to do in case of division by zero.
 /// * `scheme`: What scheme are we using?
 /// * `suffix`: What char to use as suffix?
-/// * ` `: What   are we using to differentiate the prefix from
-///   the rest of the tag? The most common   is `-`.
 /// * `parallel`: Can we use multiple cores for matrix computations?
 pub fn classification_report<'a>(
     y_true: Vec<Vec<&'a str>>,
     y_pred: Vec<Vec<&'a str>>,
     sample_weight: Option<Vec<f32>>,
     zero_division: DivByZeroStrat,
-    scheme: SchemeType,
+    scheme: Option<SchemeType>,
     suffix: bool,
     parallel: bool,
-    strict: bool,
 ) -> Result<Reporter, ComputationError<String>> {
     check_consistent_length(y_true.as_ref(), y_pred.as_ref())?;
     let mut y_true_struct = TokenVecs::from(y_true);
     let mut y_pred_struct = TokenVecs::from(y_pred);
     let sample_weight_array = sample_weight.map(ArcArray::from_vec);
+    let strict = scheme.is_some();
     let entities_true = if strict {
-        Entities::try_from_strict(&mut y_true_struct, scheme, suffix)?
+        Entities::try_from_strict(&mut y_true_struct, scheme.unwrap(), suffix)?
     } else {
         get_entities_lenient(&y_true_struct, suffix)?
     };
     let entities_pred = if strict {
-        Entities::try_from_strict(&mut y_pred_struct, scheme, suffix)?
+        Entities::try_from_strict(&mut y_pred_struct, scheme.unwrap(), suffix)?
     } else {
         get_entities_lenient(&y_pred_struct, suffix)?
     };
@@ -713,7 +711,7 @@ pub fn classification_report<'a>(
         Average::None,
         sample_weight_array.clone(), //inexpensive to clone!
         zero_division,
-        scheme,
+        scheme.unwrap(),
         suffix,
         parallel,
         Some((&entities_true, &entities_pred)),
@@ -751,7 +749,7 @@ pub fn classification_report<'a>(
             avg.into(),
             sample_weight_array.clone(),
             zero_division,
-            scheme,
+            scheme.unwrap_or_default(),
             suffix,
             parallel,
             Some((&entities_true, &entities_pred)),
@@ -811,10 +809,9 @@ mod tests {
             y_pred,
             None,
             DivByZeroStrat::ReplaceBy0,
-            SchemeType::IOB2,
+            Some(SchemeType::IOB2),
             false,
             false,
-            true,
         )
         .unwrap();
         {
@@ -928,9 +925,8 @@ mod tests {
                 y_pred,
                 None,
                 DivByZeroStrat::ReplaceBy1,
-                SchemeType::IOB2,
+                Some(SchemeType::IOB2),
                 false,
-                true,
                 true,
             );
             // .expect_err("There was no error here!");
@@ -953,9 +949,8 @@ mod tests {
             y_pred,
             None,
             DivByZeroStrat::ReplaceBy0,
-            SchemeType::IOB2,
+            Some(SchemeType::IOB2),
             false,
-            true,
             true,
         );
         let reporter_unwrapped = reporter.unwrap();

@@ -20,26 +20,24 @@ impl DefaultRusevConfig {
             scheme: Some(SchemeType::IOB2),
             suffix: false,
             parallel: false,
-            strict: false,
         }
     }
 }
 
-impl<Samples, ZeroDiv, Scheme> From<(Option<Samples>, ZeroDiv, Option<Scheme>, bool, bool, bool)>
+impl<Samples, ZeroDiv, Scheme> From<(Option<Samples>, ZeroDiv, Option<Scheme>, bool, bool)>
     for RusevConfig<Samples, ZeroDiv, Scheme>
 where
     Samples: Into<Option<Vec<f32>>>,
     ZeroDiv: Into<DivByZeroStrat>,
     Scheme: Into<SchemeType>,
 {
-    fn from(value: (Option<Samples>, ZeroDiv, Option<Scheme>, bool, bool, bool)) -> Self {
+    fn from(value: (Option<Samples>, ZeroDiv, Option<Scheme>, bool, bool)) -> Self {
         Self {
             sample_weights: value.0,
             zero_division: value.1,
             scheme: value.2,
             suffix: value.3,
             parallel: value.4,
-            strict: value.5,
         }
     }
 }
@@ -58,7 +56,6 @@ where
             scheme: value.scheme.map(|s| s.into()),
             parallel: value.parallel,
             suffix: value.suffix,
-            strict: value.strict,
         }
     }
 }
@@ -68,7 +65,6 @@ impl<Samples, ZeroDiv, Scheme> From<RusevConfig<Samples, ZeroDiv, Scheme>>
         Option<Vec<f32>>,
         DivByZeroStrat,
         Option<crate::entity::SchemeType>,
-        bool,
         bool,
         bool,
     )
@@ -84,7 +80,6 @@ where
             value.scheme.map(|v| v.into()),
             value.suffix,
             value.parallel,
-            value.strict,
         )
     }
 }
@@ -103,7 +98,6 @@ where
     scheme: Option<Scheme>,
     suffix: bool,
     parallel: bool,
-    strict: bool,
 }
 
 impl Default for DefaultRusevConfig {
@@ -114,7 +108,6 @@ impl Default for DefaultRusevConfig {
             scheme: None,
             suffix: false,
             parallel: false,
-            strict: false,
         }
     }
 }
@@ -126,7 +119,7 @@ where
     Scheme: Into<SchemeType> + Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let string = format!("Samples weights: {:?}\n Strategy when encountering a division by zero: {:?}\n Optional scheme used:{:?}\n Prefix located in the front of the tokens: {}\n Using parallel computations: {}\n Using strict mode: {}", self.sample_weights, self.zero_division, self.scheme, self.suffix, self.parallel, self.strict);
+        let string = format!("Samples weights: {:?}\n Strategy when encountering a division by zero: {:?}\n Optional scheme used:{:?}\n Prefix located in the front of the tokens: {}\n Using parallel computations: {}", self.sample_weights, self.zero_division, self.scheme, self.suffix, self.parallel);
         write!(f, "{}", string)
     }
 }
@@ -240,15 +233,6 @@ mod test {
         let builder = RusevConfigBuilder::default();
         let config = builder.parallel(parallel).build();
         assert_eq!(config.parallel, parallel)
-    }
-
-    #[rstest]
-    #[case(true)]
-    #[case(false)]
-    fn test_builder_setters_strict(#[case] strict: bool) {
-        let builder = RusevConfigBuilder::default();
-        let config = builder.strict(strict).build();
-        assert_eq!(config.strict, strict)
     }
 
     #[rstest]

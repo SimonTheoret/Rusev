@@ -93,8 +93,7 @@ where
     ZeroDiv: Into<DivByZeroStrat>,
     Scheme: Into<SchemeType>,
 {
-    let (sample_weights, div_by_zero, scheme, suffix, parallel, strict) = config.into();
-    let scheme = scheme.unwrap_or_default();
+    let (sample_weights, div_by_zero, scheme, suffix, parallel) = config.into();
     classification_report(
         y_true,
         y_pred,
@@ -103,6 +102,5 @@ where
         scheme,
         suffix,
         parallel,
-        strict,
     )
 }

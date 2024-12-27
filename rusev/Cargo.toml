@@ -24,10 +24,9 @@ license-file = "License.txt"
 repository = "https://github.com/SimonTheoret/rusev"
 keywords = ["ML", "SeqEval", "Metrics", "NLP", "NER"]
 categories = ["science", "text-processing", "mathematics"]
-rust-version = "1.80.1"
+rust-version = "1.80.1" #MSRV
 
 [lib]
-# path = "src/lib.rs"
 
 [dependencies]
 ndarray = { version = "0.16.1", features = ["serde", "rayon", "blas"] }

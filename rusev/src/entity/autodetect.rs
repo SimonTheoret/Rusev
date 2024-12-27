@@ -72,6 +72,9 @@ static ALLOWED_BILOU_PREFIXES: LazyLock<[AHashSet<UserPrefix>; 9]> = LazyLock::n
 
 /// This impl block contains the logic of the auto-detect feature.
 impl SchemeType {
+    /// Autodetect the scheme used in `sequences`. Note that function is has to parse the input, so
+    /// the longer the input, the longer this function will take. It might be better to give it a
+    /// relatively small sample.
     /// auto_detect supports the following schemes:
     /// - IOB2
     /// - IOE2
