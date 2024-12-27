@@ -30,7 +30,7 @@ jobs:
       - name: Check
         run: cargo check --verbose --manifest-path rusev/Cargo.toml
       - name: Format
-        run: cargo fmt --all -- --check --verbose --manifest-path rusev/Cargo.toml
+        run: cargo fmt --all --manifest-path rusev/Cargo.toml -- --check --verbose
       - name: Clippy
         run: cargo clippy -- -D warnings --verbose --manifest-path rusev/Cargo.toml
 
