@@ -1,6 +1,6 @@
 use crate::entity::{schemes::SchemeType, InnerToken, UserPrefix};
 use ahash::AHashSet;
-use std::{error::Error, fmt::Display, sync::LazyLock};
+use std::sync::LazyLock;
 
 static ALLOWED_IOB2_PREFIXES: LazyLock<[AHashSet<UserPrefix>; 4]> = LazyLock::new(|| {
     [
@@ -69,33 +69,6 @@ static ALLOWED_BILOU_PREFIXES: LazyLock<[AHashSet<UserPrefix>; 9]> = LazyLock::n
 //     {Prefix.B, Prefix.L},
 //     {Prefix.U}
 // ]
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum AutoDetectError {
-    TooManySchemesParsed(AHashSet<SchemeType>),
-    NoSchemeParsed,
-    UnsupportedScheme,
-}
-impl Display for AutoDetectError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::TooManySchemesParsed(surviving_schemes) => write!(f, "Too many schemes could be parsed and used from the input. It is therefore ambiguous. Detected schemes: {:?}", surviving_schemes),
-            Self::NoSchemeParsed => write!(f, "No scheme could be parsed from the input"),
-            Self::UnsupportedScheme => write!(f, "Could not detect the scheme. Only IOB2, IOE2, BILOU and IOBES can be auto-detected")
-        }
-    }
-}
-
-impl Error for AutoDetectError {}
-
-// /// We can try to auto-detect the SchemeType used. This would allow to simplify the interface of
-// /// the lib and to simplify the life of the user, who might not know what scheme they are using.
-// impl TryFrom<AutoDetectScheme<'_>> for SchemeType {
-//     type Error = AutoDetectError;
-//     fn try_from(value: AutoDetectScheme) -> Result<Self, Self::Error> {
-//         Self::try_auto_detect(&value).ok_or(AutoDetectError::UnsupportedScheme)
-//     }
-// }
 
 /// This impl block contains the logic of the auto-detect feature.
 impl SchemeType {
