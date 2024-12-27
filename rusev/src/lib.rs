@@ -43,13 +43,12 @@ mod reporter;
 // The public api starts here
 pub use entity::SchemeType;
 
-
 pub use metrics::{
     classification_report, precision_recall_fscore_support, ComputationError, DivByZeroStrat,
     PrecisionRecallFScoreTrueSum,
 };
 
-pub use reporter::{ClassMetrics, Reporter, Average};
+pub use reporter::{Average, ClassMetrics, Reporter};
 
 pub use config::{DefaultRusevConfig, RusevConfig, RusevConfigBuilder};
 

@@ -16,10 +16,7 @@ impl CloseEnough for ClassMetrics {
         let precision_is_equal = f32::abs(self.precision - other.precision) < eps;
         let recall_is_equal = f32::abs(self.recall - other.recall) < eps;
         let fscore_is_equal = f32::abs(self.fscore - other.fscore) < eps;
-        return are_equal
-            && precision_is_equal
-            && recall_is_equal
-            && fscore_is_equal;
+        return are_equal && precision_is_equal && recall_is_equal && fscore_is_equal;
     }
 }
 
