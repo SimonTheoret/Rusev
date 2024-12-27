@@ -94,7 +94,7 @@ impl<'a> Iterator for InnerLenientChunkIter<'a> {
                 }
             }
         } else {
-            next_value.map(|v| *v)
+            next_value.copied()
         }
     }
 }
