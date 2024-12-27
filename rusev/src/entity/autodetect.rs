@@ -88,21 +88,14 @@ impl Display for AutoDetectError {
 
 impl Error for AutoDetectError {}
 
-/// Helper structure used to give the necessary information about the structure of the tokens when
-/// auto-detecting the scheme.
-struct AutoDetectScheme<'a> {
-    tokens: &'a [Vec<&'a str>],
-    suffix: bool,
-}
-
-/// We can try to auto-detect the SchemeType used. This would allow to simplify the interface of
-/// the lib and to simplify the life of the user, who might not know what scheme they are using.
-impl TryFrom<AutoDetectScheme<'_>> for SchemeType {
-    type Error = AutoDetectError;
-    fn try_from(value: AutoDetectScheme) -> Result<Self, Self::Error> {
-        Self::try_auto_detect_by_prefix(&value).ok_or(AutoDetectError::UnsupportedScheme)
-    }
-}
+// /// We can try to auto-detect the SchemeType used. This would allow to simplify the interface of
+// /// the lib and to simplify the life of the user, who might not know what scheme they are using.
+// impl TryFrom<AutoDetectScheme<'_>> for SchemeType {
+//     type Error = AutoDetectError;
+//     fn try_from(value: AutoDetectScheme) -> Result<Self, Self::Error> {
+//         Self::try_auto_detect(&value).ok_or(AutoDetectError::UnsupportedScheme)
+//     }
+// }
 
 /// This impl block contains the logic of the auto-detect feature.
 impl SchemeType {
@@ -111,9 +104,7 @@ impl SchemeType {
     /// - IOE2
     /// - IOBES
     /// - BILOU
-    fn try_auto_detect_by_prefix(config: &AutoDetectScheme) -> Option<SchemeType> {
-        let sequences = config.tokens;
-        let suffix = config.suffix;
+    pub fn try_auto_detect(sequences: &[Vec<&str>], suffix: bool) -> Option<SchemeType> {
         let mut prefixes: AHashSet<UserPrefix> = AHashSet::default();
         for tokens in sequences {
             for token in tokens {
@@ -138,17 +129,12 @@ impl SchemeType {
 }
 #[cfg(test)]
 mod test {
-    use super::*;
     use crate::SchemeType;
 
     #[test]
     fn test_auto_detect_scheme_by_prefix() {
         let inputs = vec![build_str_vec_diff(), build_str_vec()];
-        let config = AutoDetectScheme {
-            tokens: &inputs,
-            suffix: false,
-        };
-        let actual = SchemeType::try_auto_detect_by_prefix(&config).unwrap();
+        let actual = SchemeType::try_auto_detect(&inputs, false).unwrap();
         let expected = SchemeType::IOB2;
         assert_eq!(actual, expected)
     }
