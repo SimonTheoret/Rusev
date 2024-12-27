@@ -60,44 +60,13 @@ jobs:
           files: lcov.info
           fail_ci_if_error: true
 
-  Rustfmt:
+  format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - uses: mbrobbel/rustfmt-check@master
-
-  lint-generic:
-    runs-on: ubuntu-18.04
-    needs: build_and_test
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install other dependencies
-        run: sudo apt-get install moreutils dos2unix
-      - name: Check encoding
-        run: isutf8 **/*
-      - name: Check line endings
-        run: bash .github/workflows/scripts/check_line_endings.sh
-      - name: Check TODOs
-        run: bash .github/workflows/scripts/check_todos.sh
-
-  Clippy check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v1
-      - run: rustup component add clippy
-      - uses: actions-rs/clippy-check@v1
-
-  Rustfmt:
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-        with:
-          components: rustfmt
-      - uses: mbrobbel/rustfmt-check@master
+    - uses: actions/checkout@v4
+    - name: Check
+      run: cargo check --verbose
+    - name: Format
+      run: cargo fmt --all -- --check --verbose
+    - name: Clippy
+      run: cargo clippy -- -D warnings --verbose
