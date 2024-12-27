@@ -22,7 +22,7 @@ description = "Fast implementation of SeqEval, a sequence evaluation framework"
 license = "MIT"
 license-file = "License.txt"
 repository = "https://github.com/SimonTheoret/rusev"
-keywords = ["Machine Learning", "SeqEval", "Sequence Evaluation", "NLP", "NER"]
+keywords = ["ML", "SeqEval", "Sequence Evaluation", "NLP", "NER"]
 categories = ["science", "text-processing", "mathematics"]
 rust-version = "1.80.1"
 
