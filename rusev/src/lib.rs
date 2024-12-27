@@ -24,12 +24,15 @@ The BILOU and IOBES schemes are only supported in strict mode.
 This library partially reuses the terminology of the SeqEval library. The concepts might not be
 mapped one to one.
 * A class is an entity we are interested in, such as 'LOC' for location, 'PER' for person, 'GEO'
-    for geography, etc. It can be anything.
+    for geography, etc. It can be anything, but must be represented by a string.
 * A token is a string containing a class, such a `GEO`, `LOC`, `PER` and a prefix. The prefix
     indicates where we are in the current chunk. For a given scheme, the list of possible prefix are
-    the letters of the scheme, such as I-O-B or I-O-E. Prefix can only be a single ascii character.
-* A chunk is list of at least one token associated with a named entity.
-* A Scheme gives us enough information to parse a list of tokens into a chunk.
+    the letters of the scheme, such as I-O-B or I-O-E. Prefix are limited to the letters `O`, `I`,
+    `B`, `E`, `U` and `L`. It is essential that the tokens use these prefix.
+* A chunk is list of at least one token associated with a named entity. A chunk could be `["B-PER",
+    "I-PER". "I-PER"]`
+* A Scheme gives us enough information to parse a list of tokens into a chunk. The `SchemeType` can
+    be used to autodetect the `Scheme` used in a given list of sequences.
 */
 //TODO: Add information about the different options, such as `strict`, `parallel`, `zero_division`,
 //`suffix`, `sample_weight`.
@@ -56,7 +59,7 @@ pub use config::{DefaultRusevConfig, RusevConfig, RusevConfigBuilder};
 /// support of the true and predicted tokens. It returns information about the individual classes
 /// and different overall averages. The returned structure can be used to prettyprint the results
 /// or be converted into a HashSet. Instead of taking in the raw parameters, this function takes a
-/// `RusevConfig` struct.
+/// `RusevConfig` struct and uses sensible defaults.
 ///
 /// * `y_true`: True tokens
 /// * `y_pred`: Predicted tokens

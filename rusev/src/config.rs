@@ -17,7 +17,7 @@ impl DefaultRusevConfig {
         Self {
             sample_weights: None,
             zero_division: DivByZeroStrat::ReplaceBy0,
-            scheme: Some(SchemeType::IOB2),
+            scheme: None,
             suffix: false,
             parallel: false,
         }
@@ -93,10 +93,21 @@ where
     ZeroDiv: Into<DivByZeroStrat>,
     Scheme: Into<SchemeType>,
 {
+    /// We can give different weight to different samples. The `sample_weight` must be of the same
+    /// length as the number of samples given and is one-dimensional.
     sample_weights: Option<Samples>,
+    /// This parameter describe what to do when we encounter a division by zero when computing
+    /// precision and recall. The most common solution is to replace the results by 0.
     zero_division: ZeroDiv,
+    /// This parameter specifies the `SchemeType` used. If you don't know what scheme you are using
+    /// to encode the named entities, you can try to detect them using the `try_auto_detect`
+    /// associated function of `SchemeType`.
     scheme: Option<Scheme>,
+    /// If the prefix (e.g. 'I', 'B', 'U', ...) located at the end of the tokens? If so, this
+    /// paramter should be `true`.
     suffix: bool,
+    /// Can we use multiple cores to compute the metrics? This option should be benched. In
+    /// practice, most benchmarks show that it is better to *not* parallelize the computations.
     parallel: bool,
 }
 
