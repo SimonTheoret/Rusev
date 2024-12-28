@@ -585,7 +585,6 @@ impl<'a> Entities<'a> {
         Entities(entities)
     }
 
-    //TODO: Convert the return type to be an iterator. Avoids allocations
     #[inline(always)]
     /// Filters the entities for a given tag name and returns them in a HashSet.
     ///

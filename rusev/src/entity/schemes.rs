@@ -9,7 +9,7 @@ use std::str::FromStr;
 
 #[derive(Debug, PartialEq, Hash, Clone, Sequence, Eq)]
 /// The inner prefix are the actual prefix that can be supplied by the user. All user prefix are of
-/// length 1 (as a unicode char and regular char).
+/// length 1.
 pub(crate) enum UserPrefix {
     I,
     O,
