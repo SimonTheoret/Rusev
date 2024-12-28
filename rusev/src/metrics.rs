@@ -233,20 +233,21 @@ fn extract_tp_actual_correct_strict<'a>(
     let target_names =
         BTreeSet::from_iter(entities_pred_unique_tags.union(&entities_true_unique_tags));
 
+    //NOTE: Cloning the target_names is better for the performance
     let pred_sum: Array1<usize> = Array::from_iter(
         target_names
-            // .clone()
-            .iter()
+            .clone()
+            .into_iter()
             .map(|t| entities_pred_res.filter_count(*t)),
     );
-    let tp_sum: Array1<usize> = Array::from_iter(target_names.iter().map(|t| {
+    let tp_sum: Array1<usize> = Array::from_iter(target_names.clone().into_iter().map(|t| {
         entities_true_res
             .filter(*t)
             .intersection(&entities_pred_res.filter(*t))
             .count()
     }));
     let test = target_names
-        .iter()
+        .into_iter()
         .map(|t| entities_true_res.filter_count(*t));
     let true_sum: Array1<usize> = Array::from_iter(test);
 
@@ -685,7 +686,6 @@ pub fn classification_report<'a>(
     parallel: bool,
 ) -> Result<Reporter, ComputationError<String>> {
     check_consistent_length(y_true.as_ref(), y_pred.as_ref())?;
-    // TODO: Can we parallelize the parsing?
     let mut y_true_struct = TokenVecs::from(y_true);
     let mut y_pred_struct = TokenVecs::from(y_pred);
     let sample_weight_array = sample_weight.map(ArcArray::from_vec);
