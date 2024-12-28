@@ -57,10 +57,9 @@ fn benchmark_small_strict_dataset(c: &mut Criterion) {
                 pred_vec.clone(),
                 None,
                 rusev::DivByZeroStrat::ReplaceBy0,
-                rusev::SchemeType::IOB2,
+                Some(rusev::SchemeType::IOB2),
                 false,
                 false,
-                true,
             )
             .unwrap()
         })
@@ -76,10 +75,9 @@ fn benchmark_huge_strict_dataset(c: &mut Criterion) {
                 pred_vec.clone(),
                 None,
                 rusev::DivByZeroStrat::ReplaceBy0,
-                rusev::SchemeType::IOB2,
+                Some(rusev::SchemeType::IOB2),
                 false,
                 false,
-                true,
             )
             .unwrap()
         })
@@ -94,10 +92,9 @@ fn benchmark_big_strict_dataset(c: &mut Criterion) {
                 pred_vec.clone(),
                 None,
                 rusev::DivByZeroStrat::ReplaceBy0,
-                rusev::SchemeType::IOB2,
+                Some(rusev::SchemeType::IOB2),
                 false,
                 false,
-                true,
             )
             .unwrap()
         })

@@ -57,10 +57,9 @@ fn benchmark_small_dataset(c: &mut Criterion) {
                 pred_vec.clone(),
                 None,
                 rusev::DivByZeroStrat::ReplaceBy0,
-                rusev::SchemeType::IOB2,
+                Some(rusev::SchemeType::IOB2),
                 false,
                 false,
-                true,
             )
             .unwrap()
         })
@@ -76,10 +75,9 @@ fn benchmark_small_dataset_par(c: &mut Criterion) {
                 pred_vec.clone(),
                 None,
                 rusev::DivByZeroStrat::ReplaceBy0,
-                rusev::SchemeType::IOB2,
+                Some(rusev::SchemeType::IOB2),
                 false,
                 false,
-                true,
             )
             .unwrap()
         })
@@ -94,9 +92,8 @@ fn benchmark_huge_dataset_par(c: &mut Criterion) {
                 pred_vec.clone(),
                 None,
                 rusev::DivByZeroStrat::ReplaceBy0,
-                rusev::SchemeType::IOB2,
+                Some(rusev::SchemeType::IOB2),
                 false,
-                true,
                 true,
             )
             .unwrap()
@@ -112,10 +109,9 @@ fn benchmark_huge_dataset(c: &mut Criterion) {
                 pred_vec.clone(),
                 None,
                 rusev::DivByZeroStrat::ReplaceBy0,
-                rusev::SchemeType::IOB2,
+                Some(rusev::SchemeType::IOB2),
                 false,
                 false,
-                true,
             )
             .unwrap()
         })
@@ -131,9 +127,8 @@ fn benchmark_big_dataset_par(c: &mut Criterion) {
                 pred_vec.clone(),
                 None,
                 rusev::DivByZeroStrat::ReplaceBy0,
-                rusev::SchemeType::IOB2,
+                Some(rusev::SchemeType::IOB2),
                 false,
-                true,
                 true,
             )
             .unwrap()
@@ -149,10 +144,9 @@ fn benchmark_big_dataset(c: &mut Criterion) {
                 pred_vec.clone(),
                 None,
                 rusev::DivByZeroStrat::ReplaceBy0,
-                rusev::SchemeType::IOB2,
+                Some(rusev::SchemeType::IOB2),
                 false,
                 false,
-                true,
             )
             .unwrap()
         })

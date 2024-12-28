@@ -57,10 +57,9 @@ fn benchmark_full_lenient_dataset(c: &mut Criterion) {
                 pred_vec.clone(),
                 None,
                 rusev::DivByZeroStrat::ReplaceBy0,
-                rusev::SchemeType::IOB2,
+                Some(rusev::SchemeType::IOB2),
                 false,
                 true,
-                false,
             )
             .unwrap()
         })
@@ -75,9 +74,8 @@ fn benchmark_full_strict_dataset(c: &mut Criterion) {
                 pred_vec.clone(),
                 None,
                 rusev::DivByZeroStrat::ReplaceBy0,
-                rusev::SchemeType::IOB2,
+                Some(rusev::SchemeType::IOB2),
                 false,
-                true,
                 true,
             )
             .unwrap()
