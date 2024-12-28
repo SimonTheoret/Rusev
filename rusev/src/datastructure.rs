@@ -154,24 +154,6 @@ impl<'a, T> Iterator for VecsIterMut<'a, T> {
     }
 }
 
-// impl<'a, T> VecsIterMut<'a, T> {
-//     /// This function act as the `next` method of an `Iterator`. It does not implements the
-//     /// `Iterator` trait due to the difference in the function signature.
-//     // #[inline]
-//     // TODO: inline this and bench perf diff
-//     pub(crate) fn custom_next<'b: 'a>(&'b mut self) -> Option<&'a mut [T]> {
-//         if self.counter >= self.token_vecs.indices.len() - 1 {
-//             return None;
-//         }
-//         //TODO: Change these unwraps to something better
-//         let start = *self.token_vecs.indices.get(self.indice_index).unwrap();
-//         let end = *self.token_vecs.indices.get(self.indice_index + 1).unwrap();
-//         self.counter += 1;
-//         self.indice_index += 1;
-//         self.token_vecs.tokens.get_mut(start..end)
-//     }
-// }
-
 /// This method allocates. It should only be used in the testing environment.
 #[cfg(test)]
 impl<T> From<TokenVecs<T>> for Vec<Vec<T>>
