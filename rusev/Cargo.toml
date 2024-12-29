@@ -64,10 +64,6 @@ harness = false
 name = "classification_report_fast_full"
 harness = false
 
-[[bench]]
-name = "classification_report_parallel"
-harness = false
-
 [profile.release]
 lto="fat"
 codegen-units=1
