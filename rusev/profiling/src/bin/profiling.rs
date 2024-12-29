@@ -106,10 +106,9 @@ fn main() {
                 pred_vec,
                 None,
                 rusev::DivByZeroStrat::ReplaceBy0,
-                rusev::SchemeType::IOB2,
+                Some(rusev::SchemeType::IOB2),
                 false,
                 false,
-                true,
             )
             .unwrap();
         }
@@ -129,8 +128,7 @@ fn main() {
                 pred_vec,
                 None,
                 rusev::DivByZeroStrat::ReplaceBy0,
-                rusev::SchemeType::IOB2,
-                false,
+                None,
                 false,
                 false,
             )

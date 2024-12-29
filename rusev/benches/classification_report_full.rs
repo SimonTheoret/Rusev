@@ -57,7 +57,7 @@ fn benchmark_full_lenient_dataset(c: &mut Criterion) {
                 pred_vec.clone(),
                 None,
                 rusev::DivByZeroStrat::ReplaceBy0,
-                Some(rusev::SchemeType::IOB2),
+                None,
                 false,
                 true,
             )
