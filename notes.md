@@ -7,3 +7,8 @@
   - [x] Write property tests
 - [x] Start benchmarking
 - [x] Test for no tag tokens as input (eg. "B", "I", "I", "O")
+- [x] Clean up directory:
+    - [x] Remove `Some(...)` in the lenient versions
+    - [x] Verify the unwraps during classification
+    - [x] Correct bug in `profiling.rs`
+

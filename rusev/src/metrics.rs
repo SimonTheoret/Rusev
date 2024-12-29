@@ -257,7 +257,6 @@ fn extract_tp_actual_correct_strict<'a>(
 fn extract_tp_actual_correct_lenient<'a>(
     y_true: &'a TokenVecs<&'a str>,
     y_pred: &'a TokenVecs<&'a str>,
-    _scheme: SchemeType,
     suffix: bool,
     entities_true_and_pred: Option<(&Entities<'a>, &Entities<'a>)>,
 ) -> Result<ActualTPCorrect<usize>, ComputationError<String>> {
@@ -473,7 +472,7 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
         average,
         sample_weight,
         zero_division,
-        scheme.unwrap_or_default(),
+        scheme,
         suffix,
         parallel,
         None,
@@ -489,7 +488,7 @@ fn precision_recall_fscore_support_inner<'a, F: FloatExt>(
     average: Average,
     sample_weight: Option<ArcArray<f32, Dim<[usize; 1]>>>,
     zero_division: DivByZeroStrat,
-    scheme: SchemeType,
+    scheme: Option<SchemeType>,
     suffix: bool,
     parallel: bool,
     entities_true_and_pred: Option<(&Entities<'a>, &Entities<'a>)>,
@@ -502,9 +501,15 @@ fn precision_recall_fscore_support_inner<'a, F: FloatExt>(
         return Err(ComputationError::BetaNotPositive);
     };
     let (mut pred_sum, mut tp_sum, mut true_sum) = if strict {
-        extract_tp_actual_correct_strict(y_true, y_pred, scheme, suffix, entities_true_and_pred)?
+        extract_tp_actual_correct_strict(
+            y_true,
+            y_pred,
+            unsafe { scheme.unwrap_unchecked() },
+            suffix,
+            entities_true_and_pred,
+        )?
     } else {
-        extract_tp_actual_correct_lenient(y_true, y_pred, scheme, suffix, entities_true_and_pred)?
+        extract_tp_actual_correct_lenient(y_true, y_pred, suffix, entities_true_and_pred)?
     };
     let beta2 = beta.powi(2);
     if matches!(average, Average::Micro) {
@@ -661,7 +666,6 @@ fn par_replace<Data: PartialEq + Send + Sync + Copy, D: Dimension>(
 }
 
 #[inline(always)]
-#[allow(clippy::too_many_arguments)]
 /// Main entrypoint of the Rusev library. This function computes the precision, recall, fscore and
 /// support of the true and predicted tokens. It returns information about the individual classes
 /// and different overall averages. The returned structure can be used to prettyprint the results
@@ -711,7 +715,7 @@ pub fn classification_report<'a>(
         Average::None,
         sample_weight_array.clone(), //inexpensive to clone!
         zero_division,
-        scheme.unwrap(),
+        scheme,
         suffix,
         parallel,
         Some((&entities_true, &entities_pred)),
@@ -749,7 +753,7 @@ pub fn classification_report<'a>(
             avg.into(),
             sample_weight_array.clone(),
             zero_division,
-            scheme.unwrap_or_default(),
+            scheme,
             suffix,
             parallel,
             Some((&entities_true, &entities_pred)),
@@ -1051,7 +1055,7 @@ PER, 1, 1, 1, 1\n";
             Average::Macro,
             None,
             DivByZeroStrat::ReplaceBy0,
-            SchemeType::IOB2,
+            Some(SchemeType::IOB2),
             false,
             true,
             None,
@@ -1074,7 +1078,7 @@ PER, 1, 1, 1, 1\n";
             Average::Micro,
             None,
             DivByZeroStrat::ReplaceBy0,
-            SchemeType::IOB2,
+            Some(SchemeType::IOB2),
             false,
             true,
             None,
@@ -1109,7 +1113,7 @@ PER, 1, 1, 1, 1\n";
                 avg,
                 None,
                 DivByZeroStrat::ReplaceBy0,
-                SchemeType::IOB2,
+                Some(SchemeType::IOB2),
                 false,
                 true,
                 None,
@@ -1137,7 +1141,7 @@ PER, 1, 1, 1, 1\n";
             Average::Macro,
             None,
             DivByZeroStrat::ReplaceBy0,
-            SchemeType::IOB2,
+            Some(SchemeType::IOB2),
             false,
             true,
             None,
@@ -1170,7 +1174,7 @@ PER, 1, 1, 1, 1\n";
             Average::Micro,
             None,
             DivByZeroStrat::ReplaceBy0,
-            SchemeType::IOB2,
+            Some(SchemeType::IOB2),
             false,
             true,
             None,
@@ -1204,7 +1208,7 @@ PER, 1, 1, 1, 1\n";
             Average::Weighted,
             None,
             DivByZeroStrat::ReplaceBy0,
-            SchemeType::IOB2,
+            Some(SchemeType::IOB2),
             false,
             true,
             None,
@@ -1238,7 +1242,7 @@ PER, 1, 1, 1, 1\n";
             Average::None,
             None,
             DivByZeroStrat::ReplaceBy0,
-            SchemeType::IOB2,
+            Some(SchemeType::IOB2),
             false,
             true,
             None,
@@ -1303,7 +1307,7 @@ PER, 1, 1, 1, 1\n";
                 average.into(),
                 None,
                 DivByZeroStrat::ReplaceBy0,
-                SchemeType::IOB2,
+                Some(SchemeType::IOB2),
                 false,
                 parallel,
                 None,
@@ -1382,7 +1386,7 @@ PER, 1, 1, 1, 1\n";
                 average.into(),
                 None,
                 DivByZeroStrat::ReplaceBy0,
-                SchemeType::IOB2,
+                Some(SchemeType::IOB2),
                 false,
                 parallel,
                 None,
@@ -1420,7 +1424,7 @@ PER, 1, 1, 1, 1\n";
             OverallAverage::Macro.into(),
             None,
             DivByZeroStrat::ReplaceBy0,
-            SchemeType::IOB2,
+            Some(SchemeType::IOB2),
             false,
             false,
             None,
