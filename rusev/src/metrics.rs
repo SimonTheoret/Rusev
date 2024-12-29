@@ -8,7 +8,7 @@ This module computes the metrics (precision, recall, f-score, support) of a grou
 sequence and a predicted sequence.
 */
 use crate::reporter::{Average, ClassMetricsInner, OverallAverage, Reporter};
-use ahash::{HashMap as AHashMap, HashSet as AHashSet};
+use ahash::{random_state::RandomState, HashMap as AHashMap, HashSet as AHashSet};
 use core::fmt;
 use itertools::multizip;
 use ndarray::{prelude::*, Array, Data, ScalarOperand, Zip};
@@ -267,7 +267,8 @@ fn extract_tp_actual_correct_lenient<'a>(
             &get_entities_lenient(y_pred, suffix)?,
         ),
     };
-    let mut entities_true_init: AHashMap<&str, AHashSet<(usize, usize)>> = AHashMap::default();
+    let mut entities_true_init: AHashMap<&str, AHashSet<(usize, usize)>> =
+        AHashMap::with_capacity_and_hasher(entities_true_tmp.len(), RandomState::new());
     for e in entities_true_tmp.iter() {
         let (start, end) = (e.start, e.end);
         match entities_true_init.get_mut(e.tag) {
@@ -281,7 +282,8 @@ fn extract_tp_actual_correct_lenient<'a>(
             }
         }
     }
-    let mut entities_pred_init: AHashMap<&str, AHashSet<(usize, usize)>> = AHashMap::default();
+    let mut entities_pred_init: AHashMap<&str, AHashSet<(usize, usize)>> =
+        AHashMap::with_capacity_and_hasher(entities_pred_tmp.len(), RandomState::new());
     for e in entities_pred_tmp.iter() {
         let (start, end) = (e.start, e.end);
         match entities_pred_init.get_mut(e.tag) {

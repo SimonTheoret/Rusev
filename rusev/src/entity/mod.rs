@@ -592,6 +592,7 @@ impl<'a> Entities<'a> {
     ///   tag is equal to a reference to `tag_name` are added into the returned HashSet.
     pub fn filter<S: AsRef<str>>(&self, tag_name: S) -> AHashSet<&Entity> {
         let tag_name_ref = tag_name.as_ref();
+        // NOTE: This one of the most expansive calls:
         AHashSet::from_iter(self.iter().filter(|e| e.tag == tag_name_ref))
     }
 
@@ -606,6 +607,7 @@ impl<'a> Entities<'a> {
     }
 
     pub fn unique_tags(&self) -> AHashSet<&str> {
+        // NOTE: This one of the most expansive calls:
         AHashSet::from_iter(self.iter().map(|e| e.tag))
     }
 }
