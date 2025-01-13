@@ -11,4 +11,6 @@
     - [x] Remove `Some(...)` in the lenient versions
     - [x] Verify the unwraps during classification
     - [x] Correct bug in `profiling.rs`
+- [ ] Crate new crate out of the entity module: `Named_Entity`
+	
 

@@ -1,4 +1,3 @@
-use crate::datastructure::TokenVecs;
 use crate::entity::{
     get_entities_lenient, ConversionError, Entities, InvalidToken, ParsingError, SchemeType,
     TryFromVecStrict,
@@ -10,6 +9,7 @@ sequence and a predicted sequence.
 use crate::reporter::{Average, ClassMetricsInner, OverallAverage, Reporter};
 use ahash::{random_state::RandomState, HashMap as AHashMap, HashSet as AHashSet};
 use core::fmt;
+use flatarray::FlatArray;
 use itertools::multizip;
 use ndarray::{prelude::*, Array, Data, ScalarOperand, Zip};
 use ndarray_stats::{errors::MultiInputError, SummaryStatisticsExt};
@@ -214,8 +214,8 @@ type ActualTPCorrect<T> = (Array1<T>, Array1<T>, Array1<T>);
 
 #[inline(always)]
 fn extract_tp_actual_correct_strict<'a>(
-    y_true: &'a mut TokenVecs<&'a str>,
-    y_pred: &'a mut TokenVecs<&'a str>,
+    y_true: &'a mut FlatArray<&'a str>,
+    y_pred: &'a mut FlatArray<&'a str>,
     scheme: SchemeType,
     suffix: bool,
     entities_true_and_pred: Option<(&Entities<'a>, &Entities<'a>)>,
@@ -255,8 +255,8 @@ fn extract_tp_actual_correct_strict<'a>(
 }
 
 fn extract_tp_actual_correct_lenient<'a>(
-    y_true: &'a TokenVecs<&'a str>,
-    y_pred: &'a TokenVecs<&'a str>,
+    y_true: &'a FlatArray<&'a str>,
+    y_pred: &'a FlatArray<&'a str>,
     suffix: bool,
     entities_true_and_pred: Option<(&Entities<'a>, &Entities<'a>)>,
 ) -> Result<ActualTPCorrect<usize>, ComputationError<String>> {
@@ -464,8 +464,8 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
     suffix: bool,
     parallel: bool,
 ) -> Result<PrecisionRecallFScoreTrueSum, ComputationError<String>> {
-    let mut y_true_struct = TokenVecs::new(y_true);
-    let mut y_pred_struct = TokenVecs::new(y_pred);
+    let mut y_true_struct = FlatArray::new(y_true);
+    let mut y_pred_struct = FlatArray::new(y_pred);
     let strict = scheme.is_some();
     precision_recall_fscore_support_inner(
         &mut y_true_struct,
@@ -484,8 +484,8 @@ pub fn precision_recall_fscore_support<'a, F: FloatExt>(
 
 #[allow(clippy::too_many_arguments)]
 fn precision_recall_fscore_support_inner<'a, F: FloatExt>(
-    y_true: &'a mut TokenVecs<&'a str>,
-    y_pred: &'a mut TokenVecs<&'a str>,
+    y_true: &'a mut FlatArray<&'a str>,
+    y_pred: &'a mut FlatArray<&'a str>,
     beta: F,
     average: Average,
     sample_weight: Option<ArcArray<f32, Dim<[usize; 1]>>>,
@@ -497,7 +497,7 @@ fn precision_recall_fscore_support_inner<'a, F: FloatExt>(
     strict: bool,
 ) -> Result<PrecisionRecallFScoreTrueSum, ComputationError<String>> {
     if entities_true_and_pred.is_none() {
-        check_for_empty_slices(&y_true.tokens, &y_pred.tokens)?;
+        check_for_empty_slices(&y_true.get_content(), &y_pred.get_content())?;
     }
     if beta.is_sign_negative() {
         return Err(ComputationError::BetaNotPositive);
@@ -692,8 +692,8 @@ pub fn classification_report<'a>(
     parallel: bool,
 ) -> Result<Reporter, ComputationError<String>> {
     check_consistent_length(y_true.as_ref(), y_pred.as_ref())?;
-    let mut y_true_struct = TokenVecs::from(y_true);
-    let mut y_pred_struct = TokenVecs::from(y_pred);
+    let mut y_true_struct = FlatArray::from(y_true);
+    let mut y_pred_struct = FlatArray::from(y_pred);
     let sample_weight_array = sample_weight.map(ArcArray::from_vec);
     let strict = scheme.is_some();
     let entities_true = if strict {
@@ -711,8 +711,8 @@ pub fn classification_report<'a>(
     let unsorted_target_names = tmp_ahash_set | entities_true_unique_tags;
     let target_names_sorted_iter = BTreeSet::from_iter(unsorted_target_names);
     let (p, r, f1, s) = precision_recall_fscore_support_inner::<f32>(
-        &mut TokenVecs::default(),
-        &mut TokenVecs::default(),
+        &mut FlatArray::default(),
+        &mut FlatArray::default(),
         1.0,
         Average::None,
         sample_weight_array.clone(), //inexpensive to clone!
@@ -749,8 +749,8 @@ pub fn classification_report<'a>(
     .into_iter()
     {
         let (p, r, f1, s) = precision_recall_fscore_support_inner::<f32>(
-            &mut TokenVecs::default(),
-            &mut TokenVecs::default(),
+            &mut FlatArray::default(),
+            &mut FlatArray::default(),
             1.0,
             avg.into(),
             sample_weight_array.clone(),
@@ -1370,15 +1370,11 @@ PER, 1, 1, 1, 1\n";
                         .collect()
                 })
                 .collect();
-            if y_true_str.len() == 1 {
-                if y_true_str[0].is_empty() {
-                    return TestResult::discard();
-                }
+            if y_true_str.len() == 1 && y_true_str[0].is_empty() {
+                return TestResult::discard();
             }
-            if y_pred_str.len() == 1 {
-                if y_pred_str[0].is_empty() {
-                    return TestResult::discard();
-                }
+            if y_pred_str.len() == 1 && y_pred_str[0].is_empty() {
+                return TestResult::discard();
             }
             let beta_pos = beta.abs();
             let res = precision_recall_fscore_support_inner(
@@ -1420,8 +1416,8 @@ PER, 1, 1, 1, 1\n";
     #[test]
     fn test_empty_input() {
         let res = precision_recall_fscore_support_inner(
-            &mut TokenVecs::default(),
-            &mut TokenVecs::default(),
+            &mut FlatArray::default(),
+            &mut FlatArray::default(),
             1.0,
             OverallAverage::Macro.into(),
             None,

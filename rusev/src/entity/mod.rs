@@ -1,6 +1,6 @@
-use crate::datastructure::TokenVecs;
 use crate::entity::schemes::{InnerToken, Token, UserPrefix};
 use ahash::AHashSet;
+use flatarray::FlatArray;
 use std::{
     cell::{RefCell, UnsafeCell},
     cmp::Ordering,
@@ -43,23 +43,20 @@ impl Display for Entity<'_> {
 /// Leniently retrieves the entities from a sequence.
 #[inline(always)]
 pub(crate) fn get_entities_lenient<'a>(
-    sequence: &'a TokenVecs<&'a str>,
+    sequence: &'a FlatArray<&'a str>,
     suffix: bool,
 ) -> Result<Entities<'a>, ParsingError<String>> {
     let mut res = Vec::with_capacity(sequence.len() / 2);
     let mut indices = Vec::with_capacity(sequence.len() / 2);
     indices.push(0);
-    for vec_of_chunks in sequence.iter_vec() {
+    for vec_of_chunks in sequence.iter_arrays() {
         let chunk_iter = LenientChunkIter::new(vec_of_chunks, suffix);
         indices.push(vec_of_chunks.len());
         for entity in chunk_iter {
             res.push(entity?);
         }
     }
-    Ok(Entities(TokenVecs {
-        tokens: res.into_boxed_slice(),
-        indices: indices.into(),
-    }))
+    Ok(Entities(FlatArray::from_raw(res, indices)))
 }
 
 /// This wrapper around the content iterator appends a single `"O"` at the end of its inner
@@ -501,10 +498,10 @@ impl<S: AsRef<str> + Debug> Error for ConversionError<S> {}
 #[derive(Debug, PartialEq, Clone)]
 /// Entites are the unique tokens contained in a sequence. Entities can be built with the
 /// TryFromVec trait. This trait allows to collect from a vec
-pub(crate) struct Entities<'a>(TokenVecs<Entity<'a>>);
+pub(crate) struct Entities<'a>(FlatArray<Entity<'a>>);
 
 impl<'a> Deref for Entities<'a> {
-    type Target = TokenVecs<Entity<'a>>;
+    type Target = FlatArray<Entity<'a>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -537,7 +534,7 @@ impl<'a> Entities<'a> {
 pub(crate) trait TryFromVecStrict<'a> {
     type Error: Error;
     fn try_from_strict(
-        tokens: &'a mut TokenVecs<&'a str>,
+        tokens: &'a mut FlatArray<&'a str>,
         scheme: SchemeType,
         suffix: bool,
     ) -> Result<Entities<'a>, Self::Error>;
@@ -547,13 +544,13 @@ impl<'a> TryFromVecStrict<'a> for Entities<'a> {
     type Error = ConversionError<String>;
     #[inline(always)]
     fn try_from_strict(
-        vec_of_tokens_2d: &'a mut TokenVecs<&'a str>,
+        vec_of_tokens_2d: &'a mut FlatArray<&'a str>,
         scheme: SchemeType,
         suffix: bool,
     ) -> Result<Entities<'a>, Self::Error> {
         let len = vec_of_tokens_2d.len();
         let mut tokens = Vec::with_capacity(len);
-        let mut_iter = UnsafeCell::new(vec_of_tokens_2d.iter_vec_mut());
+        let mut_iter = UnsafeCell::new(vec_of_tokens_2d.iter_arrays_mut());
         loop {
             let current = unsafe { &mut *mut_iter.get() };
             let current_next = current.next();
@@ -564,7 +561,7 @@ impl<'a> TryFromVecStrict<'a> for Entities<'a> {
                     .collect();
                 match res {
                     Ok(vec_of_vecs) => {
-                        let tok = TokenVecs::from(vec_of_vecs);
+                        let tok = FlatArray::from(vec_of_vecs);
                         return Ok(Entities::new(tok));
                     }
                     Err(e) => return Err(e.into()),
@@ -581,7 +578,7 @@ impl<'a> TryFromVecStrict<'a> for Entities<'a> {
 
 impl<'a> Entities<'a> {
     /// Consumes the 2D array of vecs and builds the Entities.
-    pub(crate) fn new(entities: TokenVecs<Entity<'a>>) -> Self {
+    pub(crate) fn new(entities: FlatArray<Entity<'a>>) -> Self {
         Entities(entities)
     }
 
@@ -633,11 +630,11 @@ pub(super) mod tests {
                 "B-GEO", "I-GEO", "O", "B-GEO", "O", "B-PER", "I-PER", "I-PER", "B-LOC",
             ],
         ];
-        let mut vec_of_tokens_2d = TokenVecs::new(vec_of_tokens);
+        let mut vec_of_tokens_2d = FlatArray::new(vec_of_tokens);
         let entities =
             Entities::try_from_strict(&mut vec_of_tokens_2d, SchemeType::IOB2, false).unwrap();
         assert_eq!(
-            entities.tokens,
+            entities.get_content().to_vec(),
             vec![
                 Entity {
                     start: 0,
@@ -670,7 +667,6 @@ pub(super) mod tests {
                     tag: "LOC"
                 },
             ]
-            .into_boxed_slice()
         );
     }
 
@@ -706,7 +702,7 @@ pub(super) mod tests {
         fn propertie_entities_try_from_vecs_strict_IO_only(
             tokens: Vec<Vec<TokensToTest>>,
         ) -> TestResult {
-            let mut tok = TokenVecs::new(
+            let mut tok = FlatArray::new(
                 tokens
                     .into_iter()
                     .map(|v| v.into_iter().map(|t| t.into()).collect())
@@ -908,7 +904,7 @@ pub(super) mod tests {
 
     #[test]
     fn test_unique_tags() {
-        let mut sequences = TokenVecs::new(vec![build_str_vec(), build_str_vec_diff()]);
+        let mut sequences = FlatArray::new(vec![build_str_vec(), build_str_vec_diff()]);
         let entities = Entities::try_from_strict(&mut sequences, SchemeType::IOB2, false).unwrap();
         let actual_unique_tags = entities.unique_tags();
         let expected_unique_tags: AHashSet<&str> = AHashSet::from_iter(vec!["PER", "LOC", "GEO"]);
@@ -918,15 +914,12 @@ pub(super) mod tests {
     #[test]
     fn test_get_entities_lenient() {
         let tokens = vec!["B-PER", "I-PER", "O", "B-LOC"];
-        let seq = TokenVecs::new(vec![tokens.clone()]);
+        let seq = FlatArray::new(vec![tokens.clone()]);
         let actual = get_entities_lenient(&seq, false).unwrap();
         let entities = vec![Entity::new(0, 2, "PER"), Entity::new(3, 4, "LOC")];
         let expected_tokens = entities.into_boxed_slice();
-        let expected_indices = Box::new([0, tokens.len()]);
-        let expected_inner = TokenVecs {
-            tokens: expected_tokens,
-            indices: expected_indices,
-        };
+        let expected_indices = vec![0, tokens.len()];
+        let expected_inner = FlatArray::from_raw(expected_tokens, expected_indices);
         let expected = Entities(expected_inner);
         assert_eq!(actual, expected)
     }
@@ -936,12 +929,12 @@ pub(super) mod tests {
         let y_true = vec![vec![
             "O", "O", "O", "B-MISC", "I-MISC", "I-MISC", "O", "B-PER", "I-PER",
         ]];
-        let y_true = TokenVecs::new(y_true);
+        let y_true = FlatArray::new(y_true);
         let actual = get_entities_lenient(&y_true, false).unwrap();
         assert_eq!(
             actual
                 .0
-                .tokens
+                .get_content()
                 .iter()
                 .map(|e| e.as_tuple())
                 .collect::<Vec<_>>(),
@@ -954,12 +947,12 @@ pub(super) mod tests {
         let y_true = vec![vec![
             "O", "O", "O", "MISC-B", "MISC-I", "MISC-I", "O", "PER-B", "PER-I",
         ]];
-        let y_true = TokenVecs::new(y_true);
+        let y_true = FlatArray::new(y_true);
         let actual = get_entities_lenient(&y_true, true).unwrap();
         assert_eq!(
             actual
                 .0
-                .tokens
+                .get_content()
                 .iter()
                 .map(|e| e.as_tuple())
                 .collect::<Vec<_>>(),
@@ -971,12 +964,12 @@ pub(super) mod tests {
     #[allow(non_snake_case)]
     fn test_get_entities_with_only_IOB() {
         let y_true = vec![vec!["O", "O", "O", "B", "I", "I", "O"], vec!["B", "I", "O"]];
-        let y_true = TokenVecs::new(y_true);
+        let y_true = FlatArray::new(y_true);
         let actual = get_entities_lenient(&y_true, true).unwrap();
         assert_eq!(
             actual
                 .0
-                .tokens
+                .get_content()
                 .iter()
                 .map(|e| e.as_tuple())
                 .collect::<Vec<_>>(),

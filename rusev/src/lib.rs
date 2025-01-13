@@ -38,7 +38,7 @@ mapped one to one.
 //`suffix`, `sample_weight`.
 
 mod config;
-mod datastructure;
+// mod datastructure;
 mod entity;
 mod metrics;
 mod reporter;
