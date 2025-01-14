@@ -497,7 +497,7 @@ fn precision_recall_fscore_support_inner<'a, F: FloatExt>(
     strict: bool,
 ) -> Result<PrecisionRecallFScoreTrueSum, ComputationError<String>> {
     if entities_true_and_pred.is_none() {
-        check_for_empty_slices(&y_true.get_content(), &y_pred.get_content())?;
+        check_for_empty_slices(y_true.get_content(), y_pred.get_content())?;
     }
     if beta.is_sign_negative() {
         return Err(ComputationError::BetaNotPositive);
