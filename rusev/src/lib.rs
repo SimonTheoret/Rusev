@@ -38,13 +38,12 @@ mapped one to one.
 //`suffix`, `sample_weight`.
 
 mod config;
-// mod datastructure;
-mod entity;
+// mod entity;
 mod metrics;
 mod reporter;
 
 // The public api starts here
-pub use entity::SchemeType;
+pub use named_entity_parsing::SchemeType;
 
 pub use metrics::{
     classification_report, precision_recall_fscore_support, ComputationError, DivByZeroStrat,

@@ -4,9 +4,9 @@
  * `classification_report` function or the `precision_recall_fscore_support` function to simplify
  * their arguments.
 */
-use crate::entity::SchemeType;
 use crate::metrics::DivByZeroStrat;
 use either::Either as LeftOrRight;
+use named_entity_parsing::SchemeType;
 use std::fmt::{Debug, Display};
 
 /// Reasonable default configuration when computation metrics.
@@ -64,7 +64,7 @@ impl<Samples, ZeroDiv, Scheme> From<RusevConfig<Samples, ZeroDiv, Scheme>>
     for (
         Option<Vec<f32>>,
         DivByZeroStrat,
-        Option<crate::entity::SchemeType>,
+        Option<named_entity_parsing::SchemeType>,
         bool,
         bool,
     )

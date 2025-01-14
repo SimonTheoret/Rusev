@@ -1,7 +1,3 @@
-use crate::entity::{
-    get_entities_lenient, ConversionError, Entities, InvalidToken, ParsingError, SchemeType,
-    TryFromVecStrict,
-};
 /**
 This module computes the metrics (precision, recall, f-score, support) of a ground-truth
 sequence and a predicted sequence.
@@ -11,6 +7,10 @@ use ahash::{random_state::RandomState, HashMap as AHashMap, HashSet as AHashSet}
 use core::fmt;
 use flatarray::FlatArray;
 use itertools::multizip;
+use named_entity_parsing::{
+    get_entities_lenient, get_entities_strict, ConversionError, Entities, NamedEntityError,
+    SchemeType,
+};
 use ndarray::{prelude::*, Array, Data, ScalarOperand, Zip};
 use ndarray_stats::{errors::MultiInputError, SummaryStatisticsExt};
 use num::{Float, Num, NumCast};
@@ -223,8 +223,8 @@ fn extract_tp_actual_correct_strict<'a>(
     let (entities_true_res, entities_pred_res) = match entities_true_and_pred {
         Some((e1, e2)) => (e1, e2),
         None => (
-            &Entities::try_from_strict(y_true, scheme, suffix)?,
-            &Entities::try_from_strict(y_pred, scheme, suffix)?,
+            &get_entities_strict(y_true, scheme, suffix)?,
+            &get_entities_strict(y_pred, scheme, suffix)?,
         ),
     };
     let entities_pred_unique_tags = entities_pred_res.unique_tags();
@@ -368,6 +368,7 @@ pub enum ComputationError<S: AsRef<str> + std::fmt::Debug> {
     EmptyArray(String),
     EmptyOrNotUnique(ArrayNotUniqueOrEmpty),
     EmptyInput(String),
+    NamedEntity(NamedEntityError),
 }
 impl<S: AsRef<str> + std::fmt::Debug> Display for ComputationError<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -381,24 +382,31 @@ impl<S: AsRef<str> + std::fmt::Debug> Display for ComputationError<S> {
             Self::EmptyArray(empty_err) => write!(f, "Found an empty array in {}", empty_err),
             Self::EmptyOrNotUnique(size_err) => std::fmt::Display::fmt(size_err, f),
             Self::EmptyInput(which) => write!(f, "Received an empty input {}", which),
+            Self::NamedEntity(ne) => std::fmt::Display::fmt(ne, f),
         }
     }
 }
 impl<S: AsRef<str> + std::fmt::Debug> Error for ComputationError<S> {}
 
-impl<S: AsRef<str> + std::fmt::Debug> From<ParsingError<S>> for ComputationError<S> {
-    fn from(value: ParsingError<S>) -> Self {
-        let tmp_value = ConversionError::from(value);
-        Self::ConversionError(tmp_value)
+impl<S: AsRef<str> + std::fmt::Debug> From<NamedEntityError> for ComputationError<S> {
+    fn from(value: NamedEntityError) -> Self {
+        Self::NamedEntity(value)
     }
 }
 
-impl<S: AsRef<str> + std::fmt::Debug> From<InvalidToken> for ComputationError<S> {
-    fn from(value: InvalidToken) -> Self {
-        let tmp_value = ConversionError::from(value);
-        Self::ConversionError(tmp_value)
-    }
-}
+// impl<S: AsRef<str> + std::fmt::Debug> From<ParsingError<S>> for ComputationError<S> {
+//     fn from(value: ParsingError<S>) -> Self {
+//         let tmp_value = ConversionError::from(value);
+//         Self::ConversionError(tmp_value)
+//     }
+// }
+
+// impl<S: AsRef<str> + std::fmt::Debug> From<InvalidToken> for ComputationError<S> {
+//     fn from(value: InvalidToken) -> Self {
+//         let tmp_value = ConversionError::from(value);
+//         Self::ConversionError(tmp_value)
+//     }
+// }
 
 impl<S: AsRef<str> + std::fmt::Debug> From<InconsistentLengthError> for ComputationError<S> {
     fn from(value: InconsistentLengthError) -> Self {
@@ -697,12 +705,12 @@ pub fn classification_report<'a>(
     let sample_weight_array = sample_weight.map(ArcArray::from_vec);
     let strict = scheme.is_some();
     let entities_true = if strict {
-        Entities::try_from_strict(&mut y_true_struct, scheme.unwrap(), suffix)?
+        get_entities_strict(&mut y_true_struct, scheme.unwrap(), suffix)?
     } else {
         get_entities_lenient(&y_true_struct, suffix)?
     };
     let entities_pred = if strict {
-        Entities::try_from_strict(&mut y_pred_struct, scheme.unwrap(), suffix)?
+        get_entities_strict(&mut y_pred_struct, scheme.unwrap(), suffix)?
     } else {
         get_entities_lenient(&y_pred_struct, suffix)?
     };
@@ -771,8 +779,35 @@ pub fn classification_report<'a>(
 #[cfg(test)]
 mod tests {
 
-    use crate::entity::tests::TokensToTest;
+    // use crate::entity::tests::TokensToTest;
+    use enum_iterator::{all, Sequence};
     use quickcheck::{QuickCheck, TestResult};
+
+    #[derive(Debug, PartialEq, Hash, Clone, Sequence, Eq)]
+    pub(crate) enum TokensToTest {
+        BPER,
+        BGEO,
+        BLOC,
+        O,
+    }
+    impl From<TokensToTest> for &str {
+        fn from(value: TokensToTest) -> Self {
+            match value {
+                TokensToTest::BPER => "B-PER",
+                TokensToTest::BLOC => "B-LOC",
+                TokensToTest::BGEO => "B-GEO",
+                TokensToTest::O => "O",
+            }
+        }
+    }
+    impl quickcheck::Arbitrary for TokensToTest {
+        fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+            let mut choice_slice: Vec<TokensToTest> = all::<TokensToTest>().collect();
+            // Removes the `ALL` prefix
+            choice_slice.swap_remove(choice_slice.len() - 1);
+            g.choose(choice_slice.as_ref()).unwrap().clone()
+        }
+    }
 
     pub trait CloseEnough {
         fn are_close(&self, other: &Self, eps: f32) -> bool;
