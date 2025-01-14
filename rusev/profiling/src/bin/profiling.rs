@@ -47,7 +47,7 @@ fn build_vecs<P: AsRef<Path>>(path: P) -> (Vec<Vec<&'static str>>, Vec<Vec<&'sta
                 .collect()
         })
         .collect();
-    return (true_vec, pred_vec);
+    (true_vec, pred_vec)
 }
 
 // #[derive(Debug, Clone)]
