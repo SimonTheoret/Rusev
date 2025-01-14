@@ -15,7 +15,7 @@ members = [".", "profiling"]
 exclude = ["py_bindings"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Simon Théorêt <simonteoret@hotmail.com"]
 description = "Fast implementation of SeqEval, a sequence evaluation framework"
