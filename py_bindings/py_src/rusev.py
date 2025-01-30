@@ -1,0 +1,2 @@
+from py_bindings import classification_report
+print(classification_report)
