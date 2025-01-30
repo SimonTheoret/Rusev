@@ -45,7 +45,7 @@ fn build_vecs(path: &'static str) -> (Vec<Vec<&'static str>>, Vec<Vec<&'static s
                 .collect()
         })
         .collect();
-    return (true_vec, pred_vec);
+    (true_vec, pred_vec)
 }
 
 fn benchmark_small_strict_dataset(c: &mut Criterion) {

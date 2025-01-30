@@ -710,15 +710,15 @@ fn par_replace<Data: PartialEq + Send + Sync + Copy, D: Dimension>(
 /// * `y_pred`: Predicted tokens. Expected to be of the same dimensions as `y_true`.
 /// * `average`: What type of average to use. Can be any variant from [`Average`].
 /// * `sample_weight`: Optional weights of the samples. We expect this vector to be of length
-/// `number_of_samples`.
+///   `number_of_samples`.
 /// * `zero_division`: What to do in case of division by zero. The most common solution is to
-/// replace the result by 0.
+///   replace the result by 0.
 /// * `scheme`: What scheme are we using? If no scheme is provided (eg. `None`), we assume a that
-/// we are not in `strict` mode. `strict` mode is equivalent to `strict` mode in `SeqEval`:
-/// <https://github.com/chakki-works/seqeval/blob/master/README.md#usage>
+///    we are not in `strict` mode. `strict` mode is equivalent to `strict` mode in `SeqEval`:
+///    <https://github.com/chakki-works/seqeval/blob/master/README.md#usage>
 /// * `suffix`: Do we expect to have the prefix (such as "B", "I", "L", "O", "U" or "E") at the end
-/// of the token? If so, suffix should be `true`. If the prefix is located at the start of the
-/// token, suffix should be `false`.
+///   of the token? If so, suffix should be `true`. If the prefix is located at the start of the
+///   token, suffix should be `false`.
 /// * `parallel`: Can we use multiple cores for matrix computations? This is not recommended unless
 ///   you have a *very* large number of samples. It is most often better to keep it to `false`.
 pub fn classification_report<'a>(
@@ -852,11 +852,11 @@ mod tests {
             let recall_is_equal = f32::abs(self.recall - other.recall) < eps;
             let fscore_is_equal = f32::abs(self.fscore - other.fscore) < eps;
             let support_is_equal = self.support == other.support;
-            return are_equal
+            are_equal
                 && precision_is_equal
                 && recall_is_equal
                 && fscore_is_equal
-                && support_is_equal;
+                && support_is_equal
         }
     }
     impl CloseEnough for Reporter {
@@ -891,7 +891,7 @@ mod tests {
                 classes: BTreeSet::from_iter(vec![
                     ClassMetricsInner {
                         class: String::from("A"),
-                        fscore: 0.6666666666666666,
+                        fscore: 0.666_666_7,
                         precision: 1.0,
                         recall: 0.5,
                         support: 2,
@@ -915,23 +915,23 @@ mod tests {
                     },
                     ClassMetricsInner::new_overall(
                         OverallAverage::Macro,
-                        0.66666666666666,
+                        0.666_666_7,
                         0.5,
-                        0.55555555555555,
+                        0.555_555_6,
                         3,
                     ),
                     ClassMetricsInner::new_overall(
                         OverallAverage::Micro,
-                        0.66666666666666,
-                        0.66666666666666,
-                        0.66666666666666,
+                        0.666_666_7,
+                        0.666_666_7,
+                        0.666_666_7,
                         3,
                     ),
                     ClassMetricsInner::new_overall(
                         OverallAverage::Weighted,
                         1.0,
-                        0.66666666666666,
-                        0.77777777777777,
+                        0.666_666_7,
+                        0.777_777_8,
                         3,
                     ),
                 ]),
@@ -1319,9 +1319,9 @@ PER, 1, 1, 1, 1\n";
         .unwrap();
         let actual = (arr_p, arr_r, arr_f, arr_s);
         let expected = (
-            array![0. as f32, 1. as f32],
-            array![0. as f32, 1. as f32],
-            array![0. as f32, 1. as f32],
+            array![0_f32, 1_f32],
+            array![0_f32, 1_f32],
+            array![0_f32, 1_f32],
             array![1, 1],
         );
         assert_eq!(actual, expected)

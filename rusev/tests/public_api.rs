@@ -16,7 +16,7 @@ impl CloseEnough for ClassMetrics {
         let precision_is_equal = f32::abs(self.precision - other.precision) < eps;
         let recall_is_equal = f32::abs(self.recall - other.recall) < eps;
         let fscore_is_equal = f32::abs(self.fscore - other.fscore) < eps;
-        return are_equal && precision_is_equal && recall_is_equal && fscore_is_equal;
+        are_equal && precision_is_equal && recall_is_equal && fscore_is_equal
     }
 }
 
@@ -27,7 +27,7 @@ fn comparison_to_conlleval() {
     let mut true_y: Vec<&str> = vec![];
     let mut pred_y: Vec<&str> = vec![];
     for line in content.lines() {
-        if line == "" {
+        if line.is_empty() {
             continue;
         }
         let vect: Vec<_> = line.split(' ').collect();
