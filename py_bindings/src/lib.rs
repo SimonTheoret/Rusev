@@ -1,11 +1,6 @@
 use pyo3::prelude::*;
 use rusev;
 
-/// Formats the sum of two numbers as string.
-// fn classification_report() -> PyResult<String> {
-//     Ok(String::from("Ok"))
-// }
-
 #[inline(always)]
 #[pyfunction]
 pub fn classification_report<'a>(
@@ -13,7 +8,7 @@ pub fn classification_report<'a>(
     y_pred: Vec<Vec<&'a str>>,
     sample_weight: Option<Vec<f32>>,
     zero_division: &'a str, // DivByZeroStrat,
-    scheme: &'a str, //SchemeType,
+    scheme: &'a str,        //SchemeType,
     suffix: bool,
     parallel: bool,
 ) -> Result<Reporter, ComputationError<String>> {
