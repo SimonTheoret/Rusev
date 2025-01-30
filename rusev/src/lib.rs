@@ -2,7 +2,7 @@
 This library is  a re-implementation of the SeqEval library. It is built with a focus on
 performance and soudness.
 # SCHEMES
-The current schemes are supported:
+The current [SchemeType] are supported:
 * IOB1: Here, `I` is a token inside a chunk, `O` is a token outside a chunk and `B` is the
     beginning of the chunk immediately following another chunk of the same named entity.
 * IOB2: It is same as IOB1, except that a `B` tag is given for every token, which exists at the
@@ -32,6 +32,35 @@ mapped one to one.
 * A chunk is list of at least one token associated with a named entity. A chunk could be `["B-PER", "I-PER", "I-PER"]` for example.
 * A Scheme gives us enough information to parse a list of tokens into a chunk. The `SchemeType` can
     be used to autodetect the `Scheme` used in a given list of sequences.
+
+# Example
+Here is a simple example showing how to use this library by using the `config` API (eg. [classification_report_conf]):
+``` rust
+use rusev::{SchemeType, RusevConfigBuilder, DefaultRusevConfig, classification_report_conf};
+
+let y_true = vec![vec!["B-TEST", "B-NOTEST", "O", "B-TEST"]];
+let y_pred = vec![vec!["O", "B-NOTEST", "B-OTHER", "B-TEST"]];
+let config: DefaultRusevConfig =
+RusevConfigBuilder::default().scheme(SchemeType::IOB2).strict(true).build();
+
+let wrapped_reporter = classification_report_conf(y_true, y_pred, config);
+let reporter = wrapped_reporter.unwrap();
+let expected_report = "Class, Precision, Recall, Fscore, Support
+Overall_Weighted, 1, 0.6666667, 0.77777785, 3
+Overall_Micro, 0.6666667, 0.6666667, 0.6666667, 3
+Overall_Macro, 0.6666667, 0.5, 0.5555556, 3
+NOTEST, 1, 1, 1, 1
+OTHER, 0, 0, 0, 0
+TEST, 1, 0.5, 0.6666667, 2\n";
+
+assert_eq!(expected_report, reporter.to_string());
+```
+It is also possible to use the `classification_report` ([classification_report]) function and to
+specify each parameters manually.
+
+Rusev also exposes a function to compute the precision, recall, F-score and support for a given
+[Average] and a `beta` for the F-score calculations with the function
+[precision_recall_fscore_support]
 */
 
 mod config;
