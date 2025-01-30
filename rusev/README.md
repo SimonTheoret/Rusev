@@ -1,7 +1,7 @@
 # Rusev: Rust Sequence Evaluation framework
 
 This crates is a port of the `SeqEval` library, focused on performance and
-soudness. It presents a simple interface, composed two functions and a
+soudness. It presents a simple interface, composed of two functions and a
 variation:  `classification_report(_conf)` and
 `precision_recall_fscore_support`. One can use these two functions to obtain
 the precision, the recall, the fscore and the support of each named entity and
