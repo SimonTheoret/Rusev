@@ -1,9 +1,24 @@
 # Rusev: Rust Sequence Evaluation framework
 [![codecov](https://codecov.io/gh/SimonTheoret/Rusev/graph/badge.svg?token=GOYLEM2QN7)](https://codecov.io/gh/SimonTheoret/Rusev)
+![crates.io](https://img.shields.io/crates/v/rusev.svg)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-This crates is a port of the `SeqEval` library, focused on performance and
-soudness. It presents a simple interface, composed of two functions and a
-variation:  `classification_report(_conf)` and
+## Installation
+In a rust project, this crate can be added as a dependency with the following command:
+``` bash
+cargo add rusev
+```
+
+## Features
+* Compute metrics such as precision, recall, f-score, support.
+* Report metrics as a String or a HashSet
+* Auto-detect the scheme used (see `SchemeType::try_auto_detect`)
+* 14-23 times faster than [SeqEval](https://github.com/chakki-works/seqeval)
+
+## Introduction and Usage
+This crates is a port of the [SeqEval](https://github.com/chakki-works/seqeval)
+library, focused on performance and soudness. It presents a simple interface,
+composed of two functions and a variation:  `classification_report(_conf)` and
 `precision_recall_fscore_support`. One can use these two functions to obtain
 the precision, the recall, the fscore and the support of each named entity and
 the overall metrics.  Users can obtain these metrics with the `conf` variation
@@ -56,7 +71,7 @@ assert_eq!(expected_report, reporter.to_string());
 ## Why another implementation
 This implementation was build for performance. On some benchmarks, it is 14 to
 23 times faster than the original library, making it useful to reduce the time
-spent evaluating models during.
+spent evaluating models.
 
 ## Testing and Benchmarks
 This library was tested against

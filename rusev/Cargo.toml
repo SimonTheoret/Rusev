@@ -11,7 +11,7 @@ categories.workspace = true
 description.workspace = true
 
 [workspace]
-members = [".", "profiling"]
+members = [".", "benchmarking"]
 exclude = ["py_bindings"]
 
 [workspace.package]
@@ -38,7 +38,7 @@ serde = { version = "1.0.215", features = ["derive"] }
 enum-iterator = "2.1.0"
 either = "1.13.0"
 flatarray = "0.6.0"
-named_entity_parsing = "0.2.0"
+named_entity_parsing = "0.3.0"
 
 [dev-dependencies]
 quickcheck = "1.0.3"
