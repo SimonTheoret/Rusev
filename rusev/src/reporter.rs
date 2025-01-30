@@ -7,13 +7,14 @@ use std::cmp::PartialOrd;
 use std::collections::{BTreeSet, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
+use std::str::FromStr;
 
 /// The reporter holds the metrics of a given class and the overall metrics. It can be used to
 /// display the results (i.e. prettyprint them) as if they were collected into a dataframe and can
 /// be consumed to obtain a `BTreeSet` containing the metrics. The reporter can be built with the
 /// `classification_report` function.
 //
-/// #Example
+/// # Example
 ///
 /// ```rust
 /// use rusev::{ classification_report, DivByZeroStrat, SchemeType };
@@ -23,9 +24,16 @@ use std::hash::Hash;
 /// let y_pred = vec![vec!["O", "B-NOTEST", "B-OTHER", "B-TEST"]];
 ///
 ///
-/// let reporter = classification_report(y_true, y_pred, None, DivByZeroStrat::ReplaceBy0,
-///  Some(SchemeType::IOB2), false, false).unwrap();
-/// let expected_report = "Class, Precision, Recall, Fscore, Support
+/// let reporter = classification_report(y_true,
+///                                      y_pred,
+///                                      None,
+///                                      DivByZeroStrat::ReplaceBy0,
+///                                      Some(SchemeType::IOB2),
+///                                      false,
+///                                      false).unwrap();
+///
+/// let expected_report =
+/// "Class, Precision, Recall, Fscore, Support
 /// Overall_Weighted, 1, 0.6666667, 0.77777785, 3
 /// Overall_Micro, 0.6666667, 0.6666667, 0.6666667, 3
 /// Overall_Macro, 0.6666667, 0.5, 0.5555556, 3
@@ -197,6 +205,8 @@ impl Display for ClassMetricsInner {
     }
 }
 
+/// Enumeration of the different types of averaging possible and supported by this crate. &str can
+/// be parsed to create an `Average`.
 #[derive(Debug, Hash, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
 pub enum Average {
     None,
@@ -208,6 +218,31 @@ pub enum Average {
 impl Display for Average {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+impl FromStr for Average {
+    type Err = AverageParsingError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "none" => Ok(Average::None),
+            "micro" => Ok(Average::Micro),
+            "macro" => Ok(Average::Macro),
+            "weighted" => Ok(Average::Weighted),
+            "samples" => Ok(Average::Samples),
+            _ => Err(AverageParsingError(String::from(s))),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Clone)]
+pub struct AverageParsingError(String);
+impl Display for AverageParsingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Impossible to parse the string ({}) into an Average",
+            self.0
+        )
     }
 }
 

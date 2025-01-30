@@ -9,7 +9,7 @@ use either::Either as LeftOrRight;
 use named_entity_parsing::SchemeType;
 use std::fmt::{Debug, Display};
 
-/// Reasonable default configuration when computation metrics.
+/// Reasonable default configuration when computing metrics.
 pub type DefaultRusevConfig = RusevConfig<Vec<f32>, DivByZeroStrat, SchemeType>;
 
 impl DefaultRusevConfig {
@@ -86,28 +86,29 @@ where
 
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 /// Config struct used to simplify the imputs of parameters to the main functions of `Rusev`. It
-/// Implements the default trait.
+/// Implements the `Default` trait.
 pub struct RusevConfig<Samples, ZeroDiv, Scheme>
 where
     Samples: Into<Option<Vec<f32>>>,
     ZeroDiv: Into<DivByZeroStrat>,
     Scheme: Into<SchemeType>,
 {
-    /// We can give different weight to different samples. The `sample_weight` must be of the same
-    /// length as the number of samples given and is one-dimensional.
+    /// Optional weights of the samples. We expect this vector to be of length
+    /// `number_of_samples`.
     sample_weights: Option<Samples>,
-    /// This parameter describe what to do when we encounter a division by zero when computing
-    /// precision and recall. The most common solution is to replace the results by 0.
+    ///  What to do in case of division by zero. The most common solution is to replace the result by
+    ///  0.
     zero_division: ZeroDiv,
-    /// This parameter specifies the `SchemeType` used. If you don't know what scheme you are using
-    /// to encode the named entities, you can try to detect them using the `try_auto_detect`
-    /// associated function of `SchemeType`.
+    /// What scheme are we using? If no scheme is provided (eg. `None`), we assume a that we are
+    /// not in `strict` mode. `strict` mode is equivalent to `strict` mode in `SeqEval`:
+    /// <https://github.com/chakki-works/seqeval/blob/master/README.md#usage>
     scheme: Option<Scheme>,
-    /// If the prefix (e.g. 'I', 'B', 'U', ...) located at the end of the tokens? If so, this
-    /// paramter should be `true`.
+    /// Do we expect to have the prefix (such as "B", "I", "L", "O", "U" or "E") at the end of the
+    /// token? If so, suffix should be `true`. If the prefix is located at the start of the token,
+    /// suffix should be `false`.
     suffix: bool,
-    /// Can we use multiple cores to compute the metrics? This option should be benched. In
-    /// practice, most benchmarks show that it is better to *not* parallelize the computations.
+    /// Can we use multiple cores for matrix computations? This is not recommended unless you have a
+    /// *very* large number of samples. It is most often better to keep it to `false`.
     parallel: bool,
 }
 

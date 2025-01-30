@@ -85,30 +85,55 @@ impl Default for DivByZeroStrat {
     }
 }
 
-#[derive(Debug)]
-pub struct ParsingDivisionByZeroStrategyError<S: Debug + Display>(S);
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct DivByZeroStratParsingError(String);
 
-impl<S: Debug + Display> Display for ParsingDivisionByZeroStrategyError<S> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for DivByZeroStratParsingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Could not parse the {} into a a `DivisionByZeroStrategy`",
+            "Impossible to parse the string ({}) into an DivByZeroStrat",
             self.0
         )
     }
 }
-impl<S: Debug + Display> Error for ParsingDivisionByZeroStrategyError<S> {}
 
 impl FromStr for DivByZeroStrat {
-    type Err = ParsingDivisionByZeroStrategyError<String>;
+    type Err = DivByZeroStratParsingError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_ref() {
-            "replaceby1" | "replacebyone" => Ok(DivByZeroStrat::ReplaceBy1),
-            "returnerror" | "error" => Ok(DivByZeroStrat::ReturnError),
-            _ => Err(ParsingDivisionByZeroStrategyError(String::from(s))),
+            "replaceby1" | "replacebyone" => Ok(Self::ReplaceBy1),
+            "replaceby0" | "replacebyzero" => Ok(Self::ReplaceBy0),
+            "returnerrors" | "returnerror" => Ok(Self::ReturnError),
+            _ => Err(DivByZeroStratParsingError(String::from(s))),
         }
     }
 }
+
+// #[derive(Debug)]
+// pub struct ParsingDivisionByZeroStrategyError<S: Debug + Display>(S);
+//
+// impl<S: Debug + Display> Display for ParsingDivisionByZeroStrategyError<S> {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write!(
+//             f,
+//             "Could not parse the {} into a a `DivisionByZeroStrategy`",
+//             self.0
+//         )
+//     }
+// }
+// impl<S: Debug + Display> Error for ParsingDivisionByZeroStrategyError<S> {}
+//
+// impl FromStr for DivByZeroStrat {
+//     type Err = ParsingDivisionByZeroStrategyError<String>;
+//     fn from_str(s: &str) -> Result<Self, Self::Err> {
+//         match s.to_lowercase().as_ref() {
+//             "replaceby1" | "replacebyone" => Ok(DivByZeroStrat::ReplaceBy1),
+//             "returnerror" | "error" | "returnerrors" => Ok(DivByZeroStrat::ReturnError),
+//             _ => Err(ParsingDivisionByZeroStrategyError(String::from(s))),
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DivisionByZeroError;
@@ -233,7 +258,7 @@ fn extract_tp_actual_correct_strict<'a>(
     let target_names =
         BTreeSet::from_iter(entities_pred_unique_tags.union(&entities_true_unique_tags));
 
-    //NOTE: Cloning the target_names is better for the performance
+    //NOTE: Cloning the target_names is better in terms of performance
     let pred_sum: Array1<usize> = Array::from_iter(
         target_names
             .clone()
@@ -436,8 +461,8 @@ impl<S: AsRef<str> + std::fmt::Debug> From<ArrayNotUniqueOrEmpty> for Computatio
     }
 }
 
-/// Type alias for representing the output of the `precision_recall_fscore_support`. Each arrays
-/// contain a vector of f32. The first array contains the precision, the second the recall, the
+/// Type alias for representing the output of the `precision_recall_fscore_support`. Each index
+/// contain a one dimension array of `f32`s. The first array contains the precision, the second the recall, the
 /// third the f-score and the last one the support.
 pub type PrecisionRecallFScoreTrueSum = (
     Array<f32, Dim<[usize; 1]>>,
@@ -676,20 +701,26 @@ fn par_replace<Data: PartialEq + Send + Sync + Copy, D: Dimension>(
 }
 
 #[inline(always)]
-/// Main entrypoint of the Rusev library. This function computes the precision, recall, fscore and
+/// One of the main entrypoints of the Rusev library. This function computes the precision, recall, fscore and
 /// support of the true and predicted tokens. It returns information about the individual classes
 /// and different overall averages. The returned structure can be used to prettyprint the results
 /// or be converted into a HashSet.
 ///
-/// * `y_true`: True tokens
-/// * `y_pred`: Predicted tokens
-/// * `beta`: Value of the `beta` parameter of the fscore. `beta=1` for F1 and `beta=0.5` for F0.5.
-/// * `average`: What type of average to use.
-/// * `sample_weight`: Optional weights of the samples.
-/// * `zero_division`: What to do in case of division by zero.
-/// * `scheme`: What scheme are we using?
-/// * `suffix`: What char to use as suffix?
-/// * `parallel`: Can we use multiple cores for matrix computations?
+/// * `y_true`: True tokens. Expected to be of the same dimensions as `y_pred`.
+/// * `y_pred`: Predicted tokens. Expected to be of the same dimensions as `y_true`.
+/// * `average`: What type of average to use. Can be any variant from [`Average`].
+/// * `sample_weight`: Optional weights of the samples. We expect this vector to be of length
+/// `number_of_samples`.
+/// * `zero_division`: What to do in case of division by zero. The most common solution is to
+/// replace the result by 0.
+/// * `scheme`: What scheme are we using? If no scheme is provided (eg. `None`), we assume a that
+/// we are not in `strict` mode. `strict` mode is equivalent to `strict` mode in `SeqEval`:
+/// <https://github.com/chakki-works/seqeval/blob/master/README.md#usage>
+/// * `suffix`: Do we expect to have the prefix (such as "B", "I", "L", "O", "U" or "E") at the end
+/// of the token? If so, suffix should be `true`. If the prefix is located at the start of the
+/// token, suffix should be `false`.
+/// * `parallel`: Can we use multiple cores for matrix computations? This is not recommended unless
+///   you have a *very* large number of samples. It is most often better to keep it to `false`.
 pub fn classification_report<'a>(
     y_true: Vec<Vec<&'a str>>,
     y_pred: Vec<Vec<&'a str>>,
