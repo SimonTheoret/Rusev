@@ -1,6 +1,6 @@
 # TODO
 - [x] Remove `delimiter` argument. It is not used!
-- [ ] Start fuzzy testing or property testing
+- [x] Start fuzzy testing or property testing
 - [x] Finish the calculation implementation
   - [x] Remodel Prefix into UserPrefix AND Prefix
 - [x] Write a lot of tests
@@ -11,6 +11,6 @@
     - [x] Remove `Some(...)` in the lenient versions
     - [x] Verify the unwraps during classification
     - [x] Correct bug in `profiling.rs`
-- [ ] Crate new crate out of the entity module: `Named_Entity`
-	
+- [x] Create new crates out of the entity module: `Named_Entity` and `FlatArray`
+- [ ] Change name of `py_binding` crate
 
