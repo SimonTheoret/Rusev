@@ -1,54 +1,49 @@
 {
-  description = "A rust development shell";
+  description = "Hell";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    rust-overlay.url = "github:oxalica/rust-overlay";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
   outputs =
     {
-      self,
       nixpkgs,
-      rust-overlay,
       flake-utils,
       ...
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        overlays = [ (import rust-overlay) ];
+        overlays = [ ];
         pkgs = import nixpkgs {
           inherit system overlays;
         };
-        rust = pkgs.rust-bin.stable.latest.default.override {
-          extensions = [
-            "rust-src"
-            "rust-analyzer"
-            "clippy"
-          ];
-          targets = [ ];
-        };
       in
       {
-        devShells.default = pkgs.mkShell {
-          buildInputs =
-            [ rust ]
-            ++ (with pkgs; [
-              python313Full
-              pyright
-              ruff
-              ruff-lsp
-              isort
-              pkg-config
-              cargo-expand
-            ])
-            ++ ([
-              pkgs.python313Packages.pip
-              pkgs.python313Packages.virtualenv
-            ]);
-        };
+        devShells.default =
+          (pkgs.buildFHSUserEnv {
+            name = "fhs";
+            targetPkgs =
+              pkgs:
+              (
+                with pkgs;
+                [
+                  rustc
+                  rust-analyzer
+                  cargo-expand
+                  python313Full
+                  pyright
+                  ruff
+                  ruff-lsp
+                  isort
+                ]
+                ++ (with pkgs.python313Packages; [
+                  uv
+                ])
+              );
+            runScript = "bash";
+          }).env;
       }
     );
 }
