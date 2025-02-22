@@ -1,1 +1,1 @@
-from rusev import classification_report
+from .rusev import classification_report
