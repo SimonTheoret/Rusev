@@ -67,6 +67,6 @@ pub fn classification_report<'a>(
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn py_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn rusev_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(classification_report, m)?)
 }
