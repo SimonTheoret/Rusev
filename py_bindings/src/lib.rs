@@ -65,7 +65,6 @@ pub fn classification_report<'a>(
     res
 }
 
-/// A Python module implemented in Rust.
 #[pymodule]
 fn rusev_py(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(classification_report, m)?)

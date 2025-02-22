@@ -1,15 +1,10 @@
-from dataclasses import dataclass
 from argparse import ArgumentParser
+from dataclasses import dataclass
 from time import time
-from py_bindings import classification_report  # type: ignore
 
-# from seqeval.metrics.v1 import classification_report as classification_report_strict
-# from seqeval.metrics.sequence_labeling import (
-#     classification_report as classification_report_lenient,
-# )
-# from seqeval.scheme import IOB2
-from typing import Self
 import jsonlines
+
+from py_bindings import classification_report  # type: ignore
 
 
 @dataclass
