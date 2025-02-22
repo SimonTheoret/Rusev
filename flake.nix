@@ -22,7 +22,7 @@
       in
       {
         devShells.default =
-          (pkgs.buildFHSUserEnv {
+          (pkgs.buildFHSEnv {
             name = "fhs";
             targetPkgs =
               pkgs:
