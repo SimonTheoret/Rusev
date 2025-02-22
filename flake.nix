@@ -30,6 +30,7 @@
                 with pkgs;
                 [
                   rustc
+                  rustfmt
                   rust-analyzer
                   cargo-expand
                   python313Full
