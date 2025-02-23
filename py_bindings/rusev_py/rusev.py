@@ -3,7 +3,7 @@
 # TODO: Reread documentation
 
 from py_bindings import (
-    classification_report as classification_report_inner,  # type: ignore
+    classification_report as classification_report_inner
 )
 
 

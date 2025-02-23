@@ -12,5 +12,5 @@
     - [x] Verify the unwraps during classification
     - [x] Correct bug in `profiling.rs`
 - [x] Create new crates out of the entity module: `Named_Entity` and `FlatArray`
-- [ ] Change name of `py_binding` crate
+- [x] Change name of `py_binding` crate
 
