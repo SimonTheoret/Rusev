@@ -2,6 +2,13 @@
 name = "rusev_py"
 version = "0.1.0"
 edition = "2021"
+authors = ["Simon Théorêt <simonteoret@hotmail.com"]
+description = "Fast implementation of SeqEval, a sequence evaluation framework, with python bindings"
+license = "MIT"
+repository = "https://github.com/SimonTheoret/rusev"
+keywords = ["ML", "SeqEval", "Metrics", "NLP", "NER"]
+categories = ["science", "text-processing", "mathematics"]
+rust-version = "1.80.1" #MSRV
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]

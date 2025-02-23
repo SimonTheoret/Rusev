@@ -2,9 +2,7 @@
 # TODO: Verify return type
 # TODO: Reread documentation
 
-from py_bindings import (
-    classification_report as classification_report_inner
-)
+from rusev_py import classification_report as classification_report_inner
 
 
 def classification_report(
@@ -38,7 +36,8 @@ def classification_report(
             scheme, such as `IOB1`, `IOE1`, `IOB2`, `IOE2`, `BILOU`, `IOBES`.
 
         sample_weight : array-like of shape (n_samples,), default=None
-            Sample weights. M
+            Sample weights.
+
         zero_division : "ReplaceBy1", "ReplaceBy0", or "ReturnError". Defaults to "ReplaceBy1".
             Sets the value to return when there is a zero division:
                - recall: when there are no positive labels

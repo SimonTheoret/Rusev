@@ -20,7 +20,6 @@ edition = "2021"
 authors = ["Simon Théorêt <simonteoret@hotmail.com"]
 description = "Fast implementation of SeqEval, a sequence evaluation framework"
 license = "MIT"
-license-file = "License.txt"
 repository = "https://github.com/SimonTheoret/rusev"
 keywords = ["ML", "SeqEval", "Metrics", "NLP", "NER"]
 categories = ["science", "text-processing", "mathematics"]
