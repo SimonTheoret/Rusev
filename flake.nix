@@ -21,30 +21,27 @@
         };
       in
       {
-        devShells.default =
-          (pkgs.buildFHSEnv {
-            name = "fhs";
-            targetPkgs =
-              pkgs:
-              (
-                with pkgs;
-                [
-                  rustc
-                  rustfmt
-                  rust-analyzer
-                  cargo-expand
-                  python313Full
-                  pyright
-                  ruff
-                  ruff-lsp
-                  isort
-                ]
-                ++ (with pkgs.python313Packages; [
-                  uv
-                ])
-              );
-            runScript = "bash";
-          }).env;
+        devShells = {
+          default = pkgs.mkShell {
+            packages =
+              with pkgs;
+              [
+                rustc
+                rustfmt
+                rust-analyzer
+                cargo-expand
+                cargo
+                python313Full
+                pyright
+                ruff
+                ruff-lsp
+                isort
+              ]
+              ++ (with pkgs.python313Packages; [
+                uv
+              ]);
+          };
+        };
       }
     );
 }
