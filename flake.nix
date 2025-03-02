@@ -31,14 +31,18 @@
                 rust-analyzer
                 cargo-expand
                 cargo
-                python313Full
+                python312Full
                 pyright
                 ruff
                 ruff-lsp
                 isort
               ]
-              ++ (with pkgs.python313Packages; [
+              ++ (with pkgs.python312Packages; [
                 uv
+                datasets
+                fire
+                jsonlines
+                seqeval
               ]);
           };
         };
