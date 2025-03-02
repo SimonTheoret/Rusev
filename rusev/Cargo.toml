@@ -11,7 +11,8 @@ categories.workspace = true
 description.workspace = true
 
 [workspace]
-members = [".", "benchmarking"]
+members = [".", "benchmarking", "ner_parsing", "flat_array"]
+# members = [".", "benchmarking" ]
 exclude = ["py_bindings"]
 
 [workspace.package]
@@ -36,8 +37,8 @@ itertools = "0.13.0"
 serde = { version = "1.0.215", features = ["derive"] }
 enum-iterator = "2.1.0"
 either = "1.13.0"
-flatarray = "0.6.0"
-named_entity_parsing = "0.4.0"
+flatarray = {path = "./flat_array"}
+named_entity_parsing = {path = "./ner_parsing"}
 
 [dev-dependencies]
 quickcheck = "1.0.3"

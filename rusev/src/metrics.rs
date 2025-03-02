@@ -5,6 +5,7 @@ sequence and a predicted sequence.
 use crate::reporter::{Average, ClassMetricsInner, OverallAverage, Reporter};
 use ahash::{random_state::RandomState, HashMap as AHashMap, HashSet as AHashSet};
 use core::fmt;
+// use flatarray::FlatArray;
 use flatarray::FlatArray;
 use itertools::multizip;
 use named_entity_parsing::{
