@@ -17,7 +17,7 @@ exclude = ["py_bindings"]
 
 [workspace.package]
 version = "0.4.0"
-edition = "2021"
+edition = "2024"
 authors = ["Simon Théorêt <simonteoret@hotmail.com"]
 description = "Fast implementation of SeqEval, a sequence evaluation framework"
 license = "MIT"
