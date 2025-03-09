@@ -3,17 +3,17 @@ This module computes the metrics (precision, recall, f-score, support) of a grou
 sequence and a predicted sequence.
 */
 use crate::reporter::{Average, ClassMetricsInner, OverallAverage, Reporter};
-use ahash::{random_state::RandomState, HashMap as AHashMap, HashSet as AHashSet};
+use ahash::{HashMap as AHashMap, HashSet as AHashSet, random_state::RandomState};
 use core::fmt;
 // use flatarray::FlatArray;
 use flatarray::FlatArray;
 use itertools::multizip;
 use named_entity_parsing::{
-    get_entities_lenient, get_entities_strict, ConversionError, Entities, NamedEntityError,
-    SchemeType,
+    ConversionError, Entities, NamedEntityError, SchemeType, get_entities_lenient,
+    get_entities_strict,
 };
-use ndarray::{prelude::*, Array, Data, ScalarOperand, Zip};
-use ndarray_stats::{errors::MultiInputError, SummaryStatisticsExt};
+use ndarray::{Array, Data, ScalarOperand, Zip, prelude::*};
+use ndarray_stats::{SummaryStatisticsExt, errors::MultiInputError};
 use num::{Float, Num, NumCast};
 use std::{
     cmp,
@@ -30,7 +30,8 @@ impl Display for ArrayNotUniqueOrEmpty {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "This array contains more than one element or is empty. It has length: {} Cannot call `item` on it", self.0
+            "This array contains more than one element or is empty. It has length: {} Cannot call `item` on it",
+            self.0
         )
     }
 }
@@ -588,7 +589,7 @@ fn precision_recall_fscore_support_inner<'a, F: FloatExt>(
             if tmp_weights.sum() == 0 {
                 match zero_division {
                     DivByZeroStrat::ReturnError => {
-                        return Err(ComputationError::DivisionByZero(DivisionByZeroError))
+                        return Err(ComputationError::DivisionByZero(DivisionByZeroError));
                     }
                     _ => {
                         return Ok((
@@ -596,7 +597,7 @@ fn precision_recall_fscore_support_inner<'a, F: FloatExt>(
                             recall.to_owned(),
                             f_score.to_owned(),
                             array![0],
-                        ))
+                        ));
                     }
                 }
             };
@@ -627,15 +628,18 @@ fn precision_recall_fscore_support_inner<'a, F: FloatExt>(
             Ok((final_precision, final_recall, final_f_score, true_sum))
         }
         _ => {
-            let final_precision = Array::from_vec(vec![precision
-                .mean()
-                .ok_or_else(|| ComputationError::EmptyArray(String::from("precision")))?]);
-            let final_recall = Array::from_vec(vec![recall
-                .mean()
-                .ok_or_else(|| ComputationError::EmptyArray(String::from("precision")))?]);
-            let final_f_score = Array::from_vec(vec![f_score
-                .mean()
-                .ok_or_else(|| ComputationError::EmptyArray(String::from("precision")))?]);
+            let final_precision =
+                Array::from_vec(vec![precision.mean().ok_or_else(|| {
+                    ComputationError::EmptyArray(String::from("precision"))
+                })?]);
+            let final_recall =
+                Array::from_vec(vec![recall.mean().ok_or_else(|| {
+                    ComputationError::EmptyArray(String::from("precision"))
+                })?]);
+            let final_f_score =
+                Array::from_vec(vec![f_score.mean().ok_or_else(|| {
+                    ComputationError::EmptyArray(String::from("precision"))
+                })?]);
             let final_true_sum = array![true_sum.sum()];
             Ok((final_precision, final_recall, final_f_score, final_true_sum))
         }
@@ -651,13 +655,8 @@ fn par_prf_divide_results_and_mask<I: Debug + Num + Clone + Send + Sync, D: Dime
     numerator: ArcArray<I, D>,
     mut denominator: ArrayViewMut<I, D>,
 ) -> (ArcArray<I, D>, Array<I, D>) {
-    let zero_at_mask = Zip::from(&mut denominator).par_map_collect(|d| {
-        if *d == I::zero() {
-            I::zero()
-        } else {
-            I::one()
-        }
-    });
+    let zero_at_mask = Zip::from(&mut denominator)
+        .par_map_collect(|d| if *d == I::zero() { I::zero() } else { I::one() });
     denominator.par_mapv_inplace(|v| if v == I::zero() { I::one() } else { v });
     // denominator.par_mapv_inplace(|v| if v == I::zero() { I::one() } else { v });
     // zero_at_mask.par_mapv_inplace()
@@ -674,9 +673,8 @@ fn prf_divide_results_and_mask<I: Debug + Num + Clone, D: Dimension>(
     numerator: ArcArray<I, D>,
     mut denominator: ArrayViewMut<I, D>,
 ) -> (ArcArray<I, D>, Array<I, D>) {
-    let zero_at_mask =
-        Zip::from(&mut denominator)
-            .map_collect(|d| if *d == I::zero() { I::zero() } else { I::one() });
+    let zero_at_mask = Zip::from(&mut denominator)
+        .map_collect(|d| if *d == I::zero() { I::zero() } else { I::one() });
     denominator.mapv_inplace(|v| if v == I::zero() { I::one() } else { v });
     (numerator / denominator, zero_at_mask)
 }
@@ -812,7 +810,7 @@ pub fn classification_report<'a>(
 mod tests {
 
     // use crate::entity::tests::TokensToTest;
-    use enum_iterator::{all, Sequence};
+    use enum_iterator::{Sequence, all};
     use quickcheck::{QuickCheck, TestResult};
 
     #[derive(Debug, PartialEq, Hash, Clone, Sequence, Eq)]

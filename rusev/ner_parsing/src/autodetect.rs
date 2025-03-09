@@ -1,4 +1,4 @@
-use crate::{schemes::SchemeType, InnerToken, UserPrefix};
+use crate::{InnerToken, UserPrefix, schemes::SchemeType};
 use ahash::AHashSet;
 use std::sync::LazyLock;
 

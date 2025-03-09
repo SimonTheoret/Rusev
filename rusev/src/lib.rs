@@ -72,8 +72,8 @@ mod reporter;
 pub use named_entity_parsing::SchemeType;
 
 pub use metrics::{
-    classification_report, precision_recall_fscore_support, ComputationError, DivByZeroStrat,
-    PrecisionRecallFScoreTrueSum,
+    ComputationError, DivByZeroStrat, PrecisionRecallFScoreTrueSum, classification_report,
+    precision_recall_fscore_support,
 };
 
 pub use reporter::{Average, ClassMetrics, Reporter};

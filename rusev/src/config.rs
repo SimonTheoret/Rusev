@@ -131,7 +131,10 @@ where
     Scheme: Into<SchemeType> + Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let string = format!("Samples weights: {:?}\n Strategy when encountering a division by zero: {:?}\n Optional scheme used:{:?}\n Prefix located in the front of the tokens: {}\n Using parallel computations: {}", self.sample_weights, self.zero_division, self.scheme, self.suffix, self.parallel);
+        let string = format!(
+            "Samples weights: {:?}\n Strategy when encountering a division by zero: {:?}\n Optional scheme used:{:?}\n Prefix located in the front of the tokens: {}\n Using parallel computations: {}",
+            self.sample_weights, self.zero_division, self.scheme, self.suffix, self.parallel
+        );
         write!(f, "{}", string)
     }
 }

@@ -1,6 +1,6 @@
 use rusev::{
-    classification_report_conf, ClassMetrics, DivByZeroStrat, Reporter, RusevConfigBuilder,
-    SchemeType,
+    ClassMetrics, DivByZeroStrat, Reporter, RusevConfigBuilder, SchemeType,
+    classification_report_conf,
 };
 use std::collections::HashSet;
 use std::fs::read_to_string;
