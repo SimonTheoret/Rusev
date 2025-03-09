@@ -174,9 +174,8 @@ impl<'a, T> FlatArray<T> {
     pub fn iter_arrays(&'a self) -> ArraysIter<'a, T> {
         ArraysIter::new(self)
     }
-    /// Returns an iterator over the arrays/vectors used to build the
-    /// `FlatArray`. The iterator will return a slice of type `&mut
-    /// [T]`.
+    /// Returns an iterator over the arrays/vectors used to build the `FlatArray`. The iterator
+    /// will return a slice of type `&mut [T]`.
     pub fn iter_arrays_mut(&'a mut self) -> ArraysIterMut<'a, T> {
         ArraysIterMut::new(self)
     }

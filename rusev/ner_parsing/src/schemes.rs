@@ -81,8 +81,9 @@ impl From<&UserPrefix> for Prefix {
 }
 
 #[derive(Debug, PartialEq, Hash, Clone, Sequence, Eq)]
-/// Prefix represent an annotation specifying the place of a token in a chunk. For example, in
-/// `IOB1`, the `I` prefix is used to indicate that the token is inside a NER. Prefix can only be a
+/// Prefix represent an annotation specifying the place of a token in
+/// a chunk. For example, in `IOB1`, the `I` prefix is used to
+/// indicate that the token is inside a NER. Prefix can only be a
 /// single ascii character.
 pub(crate) enum Prefix {
     I,
@@ -92,8 +93,8 @@ pub(crate) enum Prefix {
     S,
     U,
     L,
-    /// The `ANY` prefix is more of a marker than a real prefix. It is not suppposed to be supplied
-    /// by the user.
+    /// The `ANY` prefix is more of a marker than a real prefix. It is
+    /// not suppposed to be supplied by the user.
     Any,
 }
 
@@ -110,8 +111,8 @@ impl Display for Prefix {
 }
 
 impl Prefix {
-    /// This functions verifies that this prefix and the other prefix are the same or one of them
-    /// is the `PrefixAny` prefix.
+    /// This functions verifies that this prefix and the other prefix
+    /// are the same or one of them is the `PrefixAny` prefix.
     ///
     /// * `other`: The prefix to compare with `self`
     fn are_the_same_or_contains_any(&self, other: &Prefix) -> bool {
@@ -269,7 +270,7 @@ impl<'a> InnerToken<'a> {
             }
             PrefixCharIndex::End(_, _count @ 1) => token,
             PrefixCharIndex::End(_, _count @ 2) => {
-                return Err(ParsingError::PrefixError(String::from(token)))
+                return Err(ParsingError::PrefixError(String::from(token)));
             }
             PrefixCharIndex::End(_, count) => {
                 let (_, (offset, _)) = token
@@ -368,21 +369,29 @@ impl Display for InvalidToken {
 
 impl Error for InvalidToken {}
 
+// #[allow(clippy::upper_case_acronyms)]
+// #[derive(Debug, Clone, PartialEq)]
+// pub(super) enum Token<'a> {
+//     IOB1 { token: InnerToken<'a> },
+//     IOE1 { token: InnerToken<'a> },
+//     IOB2 { token: InnerToken<'a> },
+//     IOE2 { token: InnerToken<'a> },
+//     IOBES { token: InnerToken<'a> },
+//     BILOU { token: InnerToken<'a> },
+// }
+
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, PartialEq)]
-pub(super) enum Token<'a> {
-    IOB1 { token: InnerToken<'a> },
-    IOE1 { token: InnerToken<'a> },
-    IOB2 { token: InnerToken<'a> },
-    IOE2 { token: InnerToken<'a> },
-    IOBES { token: InnerToken<'a> },
-    BILOU { token: InnerToken<'a> },
+pub(super) struct Token<'a> {
+    token: InnerToken<'a>,
+    scheme_type: SchemeType,
 }
 
 impl Default for Token<'_> {
     fn default() -> Self {
-        Token::IOB1 {
+        Self {
             token: InnerToken::default(),
+            scheme_type: SchemeType::default(),
         }
     }
 }
@@ -491,65 +500,54 @@ impl<'a> Token<'a> {
     ];
 
     pub(crate) fn new(scheme: SchemeType, token: InnerToken<'a>) -> Self {
-        match scheme {
-            SchemeType::IOB1 => Token::IOB1 { token },
-            SchemeType::IOB2 => Token::IOB2 { token },
-            SchemeType::IOE1 => Token::IOE1 { token },
-            SchemeType::IOE2 => Token::IOE2 { token },
-            SchemeType::IOBES => Token::IOBES { token },
-            SchemeType::BILOU => Token::BILOU { token },
+        Self {
+            token,
+            scheme_type: scheme,
         }
     }
     fn allowed_prefixes(&'a self) -> &'static [Prefix] {
-        match self {
-            Self::IOB1 { .. } => &Self::IOB1_ALLOWED_PREFIXES,
-            Self::IOE1 { .. } => &Self::IOE1_ALLOWED_PREFIXES,
-            Self::IOB2 { .. } => &Self::IOB2_ALLOWED_PREFIXES,
-            Self::IOE2 { .. } => &Self::IOE2_ALLOWED_PREFIXES,
-            Self::IOBES { .. } => &Self::IOBES_ALLOWED_PREFIXES,
-            Self::BILOU { .. } => &Self::BILOU_ALLOWED_PREFIXES,
+        match self.scheme_type {
+            SchemeType::IOB1 => &Self::IOB1_ALLOWED_PREFIXES,
+            SchemeType::IOE1 => &Self::IOE1_ALLOWED_PREFIXES,
+            SchemeType::IOB2 => &Self::IOB2_ALLOWED_PREFIXES,
+            SchemeType::IOE2 => &Self::IOE2_ALLOWED_PREFIXES,
+            SchemeType::IOBES => &Self::IOBES_ALLOWED_PREFIXES,
+            SchemeType::BILOU => &Self::BILOU_ALLOWED_PREFIXES,
         }
     }
     fn start_patterns(&'a self) -> &'static [(Prefix, Prefix, Tag)] {
-        match self {
-            Self::IOB1 { .. } => &Self::IOB1_START_PATTERNS,
-            Self::IOE1 { .. } => &Self::IOE1_START_PATTERNS,
-            Self::IOB2 { .. } => &Self::IOB2_START_PATTERNS,
-            Self::IOE2 { .. } => &Self::IOE2_START_PATTERNS,
-            Self::IOBES { .. } => &Self::IOBES_START_PATTERNS,
-            Self::BILOU { .. } => &Self::BILOU_START_PATTERNS,
+        match self.scheme_type {
+            SchemeType::IOB1 => &Self::IOB1_START_PATTERNS,
+            SchemeType::IOE1 => &Self::IOE1_START_PATTERNS,
+            SchemeType::IOB2 => &Self::IOB2_START_PATTERNS,
+            SchemeType::IOE2 => &Self::IOE2_START_PATTERNS,
+            SchemeType::IOBES => &Self::IOBES_START_PATTERNS,
+            SchemeType::BILOU => &Self::BILOU_START_PATTERNS,
         }
     }
     fn inside_patterns(&'a self) -> &'static [(Prefix, Prefix, Tag)] {
-        match self {
-            Self::IOB1 { .. } => &Self::IOB1_INSIDE_PATTERNS,
-            Self::IOE1 { .. } => &Self::IOE1_INSIDE_PATTERNS,
-            Self::IOB2 { .. } => &Self::IOB2_INSIDE_PATTERNS,
-            Self::IOE2 { .. } => &Self::IOE2_INSIDE_PATTERNS,
-            Self::IOBES { .. } => &Self::IOBES_INSIDE_PATTERNS,
-            Self::BILOU { .. } => &Self::BILOU_INSIDE_PATTERNS,
+        match self.scheme_type {
+            SchemeType::IOB1 => &Self::IOB1_INSIDE_PATTERNS,
+            SchemeType::IOE1 => &Self::IOE1_INSIDE_PATTERNS,
+            SchemeType::IOB2 => &Self::IOB2_INSIDE_PATTERNS,
+            SchemeType::IOE2 => &Self::IOE2_INSIDE_PATTERNS,
+            SchemeType::IOBES => &Self::IOBES_INSIDE_PATTERNS,
+            SchemeType::BILOU => &Self::BILOU_INSIDE_PATTERNS,
         }
     }
     fn end_patterns(&'a self) -> &'static [(Prefix, Prefix, Tag)] {
-        match self {
-            Self::IOB1 { .. } => &Self::IOB1_END_PATTERNS,
-            Self::IOE1 { .. } => &Self::IOE1_END_PATTERNS,
-            Self::IOB2 { .. } => &Self::IOB2_END_PATTERNS,
-            Self::IOE2 { .. } => &Self::IOE2_END_PATTERNS,
-            Self::IOBES { .. } => &Self::IOBES_END_PATTERNS,
-            Self::BILOU { .. } => &Self::BILOU_END_PATTERNS,
+        match self.scheme_type {
+            SchemeType::IOB1 => &Self::IOB1_END_PATTERNS,
+            SchemeType::IOE1 => &Self::IOE1_END_PATTERNS,
+            SchemeType::IOB2 => &Self::IOB2_END_PATTERNS,
+            SchemeType::IOE2 => &Self::IOE2_END_PATTERNS,
+            SchemeType::IOBES => &Self::IOBES_END_PATTERNS,
+            SchemeType::BILOU => &Self::BILOU_END_PATTERNS,
         }
     }
 
     pub(super) fn inner(&self) -> &InnerToken {
-        match self {
-            Self::IOE1 { token } => token,
-            Self::IOE2 { token } => token,
-            Self::IOB1 { token } => token,
-            Self::IOB2 { token } => token,
-            Self::BILOU { token } => token,
-            Self::IOBES { token } => token,
-        }
+        &self.token
     }
 
     pub(super) fn is_valid(&self) -> bool {
@@ -559,47 +557,27 @@ impl<'a> Token<'a> {
 
     /// Check whether the current token is the start of chunk.
     pub(super) fn is_start(&self, prev: &InnerToken) -> bool {
-        match self {
-            Self::IOB1 { token } => token.check_patterns(prev, self.start_patterns()),
-            Self::IOB2 { token } => token.check_patterns(prev, self.start_patterns()),
-            Self::IOE1 { token } => token.check_patterns(prev, self.start_patterns()),
-            Self::IOE2 { token } => token.check_patterns(prev, self.start_patterns()),
-            Self::IOBES { token } => token.check_patterns(prev, self.start_patterns()),
-            Self::BILOU { token } => token.check_patterns(prev, self.start_patterns()),
-        }
+        self.token.check_patterns(prev, self.start_patterns())
     }
     /// Check whether the current token is the inside of chunk.
     pub(super) fn is_inside(&self, prev: &InnerToken) -> bool {
-        match self {
-            Self::IOB1 { token } => token.check_patterns(prev, self.inside_patterns()),
-            Self::IOB2 { token } => token.check_patterns(prev, self.inside_patterns()),
-            Self::IOE1 { token } => token.check_patterns(prev, self.inside_patterns()),
-            Self::IOE2 { token } => token.check_patterns(prev, self.inside_patterns()),
-            Self::IOBES { token } => token.check_patterns(prev, self.inside_patterns()),
-            Self::BILOU { token } => token.check_patterns(prev, self.inside_patterns()),
-        }
+        self.token.check_patterns(prev, &self.inside_patterns())
     }
     /// Check whether the *previous* token is the end of chunk.
     pub(super) fn is_end(&self, prev: &InnerToken) -> bool {
-        match self {
-            Self::IOB1 { token } => token.check_patterns(prev, self.end_patterns()),
-            Self::IOB2 { token } => token.check_patterns(prev, self.end_patterns()),
-            Self::IOE1 { token } => token.check_patterns(prev, self.end_patterns()),
-            Self::IOE2 { token } => token.check_patterns(prev, self.end_patterns()),
-            Self::IOBES { token } => token.check_patterns(prev, self.end_patterns()),
-            Self::BILOU { token } => token.check_patterns(prev, self.end_patterns()),
-        }
+        self.token.check_patterns(prev, self.end_patterns())
     }
     pub(super) fn get_tag(&mut self) -> &'a str {
-        match self {
-            Self::IOB1 { token } => token.tag,
-            Self::IOE1 { token } => token.tag,
-            Self::IOB2 { token } => token.tag,
-            Self::IOE2 { token } => token.tag,
-            Self::IOBES { token } => token.tag,
-            Self::BILOU { token } => token.tag,
-        }
+        self.token.tag
     }
+}
+// TODO: Document and apply this Trait to the current schemes!
+pub trait SchemeTrait<'a> {
+    fn is_valid(self) -> bool;
+    fn is_start(self, previous: Self) -> bool;
+    fn is_end(self, i: usize) -> bool;
+    fn forward(self, start: usize, prev: Self) -> usize;
+    fn get_tag(&'a self) -> &'a str;
 }
 
 #[cfg(test)]
