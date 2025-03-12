@@ -151,30 +151,6 @@ impl<S: AsRef<str>> Display for ParsingError<S> {
 }
 impl<S: AsRef<str> + Error> Error for ParsingError<S> {}
 
-//TODO: Remove this impl and use UserPrefix instead
-impl FromStr for Prefix {
-    type Err = ParsingError<String>;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::try_from_with_static_error(s)
-    }
-}
-
-//TODO: Remove this impl and use UserPrefix instead
-impl Prefix {
-    fn try_from_with_static_error(value: &str) -> Result<Self, ParsingError<String>> {
-        match value {
-            "I" => Ok(Prefix::I),
-            "O" => Ok(Prefix::O),
-            "B" => Ok(Prefix::B),
-            "E" => Ok(Prefix::E),
-            "S" => Ok(Prefix::S),
-            "U" => Ok(Prefix::U),
-            "L" => Ok(Prefix::L),
-            _ => Err(ParsingError::PrefixError(String::from(value))),
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Hash, Clone)]
 enum Tag {
     Same,
@@ -380,6 +356,16 @@ impl Error for InvalidToken {}
 //     BILOU { token: InnerToken<'a> },
 // }
 
+// TODO: Document and apply this Trait to the current schemes!
+pub trait SchemeTrait<'a> {
+    fn is_valid(&self) -> bool;
+    fn is_start(&self, previous: &Self) -> bool;
+    fn is_end(&self, prev: &Self) -> bool;
+    fn is_inside(&self, prev: &Self) -> bool;
+    fn get_tag(&self) -> String;
+    fn consume_tag(self) -> &'a str;
+}
+
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct Token<'a> {
@@ -546,38 +532,57 @@ impl<'a> Token<'a> {
         }
     }
 
-    pub(super) fn inner(&self) -> &InnerToken {
+    pub(super) fn inner_tok(&self) -> &InnerToken {
         &self.token
     }
 
-    pub(super) fn is_valid(&self) -> bool {
+    fn inner_is_valid(&self) -> bool {
         self.allowed_prefixes()
-            .contains(&Prefix::from(self.inner().prefix.clone()))
+            .contains(&Prefix::from(self.inner_tok().prefix.clone()))
     }
 
     /// Check whether the current token is the start of chunk.
-    pub(super) fn is_start(&self, prev: &InnerToken) -> bool {
-        self.token.check_patterns(prev, self.start_patterns())
+    fn inner_is_start(&self, prev: &Token) -> bool {
+        self.token
+            .check_patterns(prev.inner_tok(), self.start_patterns())
     }
     /// Check whether the current token is the inside of chunk.
-    pub(super) fn is_inside(&self, prev: &InnerToken) -> bool {
-        self.token.check_patterns(prev, &self.inside_patterns())
+    fn inner_is_inside(&self, prev: &Token) -> bool {
+        self.token
+            .check_patterns(prev.inner_tok(), self.inside_patterns())
     }
     /// Check whether the *previous* token is the end of chunk.
-    pub(super) fn is_end(&self, prev: &InnerToken) -> bool {
-        self.token.check_patterns(prev, self.end_patterns())
+    fn inner_is_end(&self, prev: &Token) -> bool {
+        self.token
+            .check_patterns(prev.inner_tok(), self.end_patterns())
     }
-    pub(super) fn get_tag(&mut self) -> &'a str {
+    fn inner_get_tag(&self) -> &'a str {
+        self.token.tag
+    }
+    fn inner_consume_tag(self) -> &'a str {
         self.token.tag
     }
 }
-// TODO: Document and apply this Trait to the current schemes!
-pub trait SchemeTrait<'a> {
-    fn is_valid(self) -> bool;
-    fn is_start(self, previous: Self) -> bool;
-    fn is_end(self, i: usize) -> bool;
-    fn forward(self, start: usize, prev: Self) -> usize;
-    fn get_tag(&'a self) -> &'a str;
+
+impl<'a> SchemeTrait<'a> for Token<'a> {
+    fn is_valid(&self) -> bool {
+        self.inner_is_valid()
+    }
+    fn is_start(&self, previous: &Self) -> bool {
+        self.inner_is_start(previous)
+    }
+    fn is_end(&self, prev: &Token) -> bool {
+        self.inner_is_end(prev)
+    }
+    fn is_inside(&self, previous: &Self) -> bool {
+        self.inner_is_inside(previous)
+    }
+    fn get_tag(&self) -> String {
+        self.inner_get_tag().to_string()
+    }
+    fn consume_tag(self) -> &'a str {
+        self.inner_consume_tag()
+    }
 }
 
 #[cfg(test)]

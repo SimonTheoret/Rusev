@@ -1,6 +1,7 @@
 use crate::schemes::{InnerToken, InvalidToken, ParsingError, Token, UserPrefix};
 use ahash::AHashSet;
 use flatarray::FlatArray;
+use std::marker::PhantomData;
 use std::{
     cell::{RefCell, UnsafeCell},
     cmp::Ordering,
@@ -15,7 +16,7 @@ mod autodetect;
 mod schemes;
 
 // Re-exporting
-pub use schemes::SchemeType;
+pub use schemes::{SchemeTrait, SchemeType};
 
 /// An entity represent a named objet in named entity recognition (NER). It
 /// contains a start and an end(i.e. at what index of the list does it starts
@@ -259,12 +260,17 @@ impl<'a> ExtendedTokensIterator<'a> {
 /// Intermediary type used to build the entities of a Vec of cows. It
 /// is a wrapper around a Vec of `Token` and allows us to parse
 /// itself.
-struct Tokens<'a> {
+struct Tokens<T>
+{
     /// Extended tokens are the parsed list of token with an `O` token
     /// as first token.
-    extended_tokens: Vec<Token<'a>>,
+    extended_tokens: Vec<T>,
 }
-impl<'a> Tokens<'a> {
+impl<'a, T> Tokens<T>
+where
+    T: SchemeTrait<'a>,
+{
+    // TODO: Rework this function to be generic over `T`
     #[inline(always)]
     fn new(
         tokens: &'a mut [&'a str],
@@ -299,7 +305,7 @@ impl<'a> Tokens<'a> {
         let slice_of_interest = &self.extended_tokens()[start..];
         let mut swap_token = prev;
         for (i, current_token) in slice_of_interest.iter().enumerate() {
-            if current_token.is_inside(swap_token.inner()) {
+            if current_token.is_inside(swap_token) {
                 swap_token = current_token;
             } else {
                 return i + start;
@@ -317,7 +323,7 @@ impl<'a> Tokens<'a> {
     fn is_end(&self, i: usize) -> bool {
         let token = &self.extended_tokens()[i];
         let prev = &self.extended_tokens()[i - 1];
-        token.is_end(prev.inner())
+        token.is_end(prev)
     }
 
     #[inline(always)]
@@ -333,13 +339,17 @@ impl<'a> Tokens<'a> {
 /// * `current`: Current token
 /// * `prev`:  Previous token
 /// * `prev_prev`: Previous token of the previous token
-struct EntitiesIterAdaptor<'a> {
+struct EntitiesIterAdaptor<'a, T: SchemeTrait> {
     index: usize,
-    tokens: RefCell<Tokens<'a>>,
+    tokens: RefCell<T>,
     len: usize,
 }
 
-impl<'a> Iterator for EntitiesIterAdaptor<'a> {
+// TODO: Adapt this implementation to work for any `T` implementing `SchemeTrait`.
+impl<'a, T> Iterator for EntitiesIterAdaptor<'a, T>
+where
+    T: SchemeTrait<'a>,
+{
     type Item = Option<Result<Entity<'a>, InvalidToken>>;
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
@@ -356,16 +366,17 @@ impl<'a> Iterator for EntitiesIterAdaptor<'a> {
         let is_valid = borrowed_current.is_valid();
         if !is_valid {
             ret = Some(Some(Err(InvalidToken(
-                borrowed_current.inner().token.to_string(),
+                borrowed_current.get_tag().to_string(),
             ))))
-        } else if borrowed_current.is_start(prev.inner()) {
+        } else if borrowed_current.is_start(prev) {
             drop(mut_tokens_ref);
             let end = mut_tokens
                 .borrow()
                 .forward(self.index + 1, &borrowed_current);
             if mut_tokens.borrow().is_end(end) {
                 drop(borrowed_current);
-                let tag = current.into_inner().get_tag();
+                let inner = current.into_inner();
+                let tag: &'a str = inner.consume_tag();
                 let entity = Entity {
                     start: self.index,
                     end,
@@ -385,9 +396,10 @@ impl<'a> Iterator for EntitiesIterAdaptor<'a> {
     }
 }
 
-impl<'a, 'b> EntitiesIterAdaptor<'a>
+impl<'a, 'b, T> EntitiesIterAdaptor<'a, T>
 where
     'a: 'b,
+    T: SchemeTrait<'a>,
 {
     /// Takes out the current tokens and gets a reference to the
     /// previous tokens (in that order) when given an index. The index
@@ -408,10 +420,7 @@ where
     /// * `index`: Index specifying the current token. `index-1` is
     ///    used to take the previous token if index!=1.
     #[inline(always)]
-    unsafe fn take_out_pair(
-        tokens: &'b mut Tokens<'a>,
-        index: usize,
-    ) -> (Token<'a>, &'b Token<'a>) {
+    unsafe fn take_out_pair(tokens: &'b mut Tokens<'a>, index: usize) -> (T, &'b T) {
         if index == 0 {
             // The outside token is actually the last token, but is treated as the first one.
             let index_of_outside_token = tokens.extended_tokens.len() - 1;
@@ -878,9 +887,9 @@ mod tests {
         dbg!(tokens.clone());
         let first_token = tokens.extended_tokens.first().unwrap();
         let second_token = tokens.extended_tokens.get(1).unwrap();
-        assert!(first_token.is_start(second_token.inner()));
+        assert!(first_token.inner_is_start(second_token));
         let outside_token = tokens.extended_tokens.last().unwrap();
-        assert!(first_token.is_start(outside_token.inner()));
+        assert!(first_token.inner_is_start(outside_token));
     }
     #[test]
     fn test_tokens_is_end() {
@@ -908,9 +917,9 @@ mod tests {
         let first_non_outside_token = tokens.extended_tokens.first().unwrap();
         let second_non_outside_token = tokens.extended_tokens.get(1).unwrap();
         let third_non_outside_token = tokens.extended_tokens.get(2).unwrap();
-        let is_end = second_non_outside_token.is_end(first_non_outside_token.inner());
+        let is_end = second_non_outside_token.inner_is_end(first_non_outside_token);
         assert!(!is_end);
-        let is_end = third_non_outside_token.is_end(first_non_outside_token.inner());
+        let is_end = third_non_outside_token.is_end(first_non_outside_token);
         assert!(is_end)
     }
 
@@ -924,11 +933,7 @@ mod tests {
         println!("{:?}", tokens);
         println!("{:?}", tokens.extended_tokens());
         let prev = tokens.extended_tokens().first().unwrap();
-        let is_start = tokens
-            .extended_tokens()
-            .get(1)
-            .unwrap()
-            .is_start(prev.inner());
+        let is_start = tokens.extended_tokens().get(1).unwrap().is_start(prev);
         assert!(!is_start)
     }
     #[test]
