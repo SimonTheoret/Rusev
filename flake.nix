@@ -31,6 +31,7 @@
                 rust-analyzer
                 cargo-expand
                 cargo
+                clippy
                 python313Full
                 pyright
                 ruff
