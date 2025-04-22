@@ -205,7 +205,7 @@ impl<'a, T> Iterator for ArraysIter<'a, T> {
     // NOTE: Inlining this function seems to _reduce_ the performance
     // #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.token_vecs.indices.len() == 0 || self.counter >= self.token_vecs.indices.len() - 1 {
+        if self.token_vecs.indices.is_empty() || self.counter >= self.token_vecs.indices.len() - 1 {
             return None;
         }
         let start = unsafe { *self.token_vecs.indices.get_unchecked(self.indice_index) };

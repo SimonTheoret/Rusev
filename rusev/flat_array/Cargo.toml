@@ -7,4 +7,4 @@ description = "Fast implementation of SeqEval, a sequence evaluation framework"
 license = "MIT"
 repository = "https://github.com/SimonTheoret/flatarray"
 keywords = ["Datastructure", "Vector", "Array"]
-rust-version = "1.78.0" #MSRV
+rust-version = "1.81" #MSRV

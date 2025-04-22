@@ -715,8 +715,8 @@ fn par_replace<Data: PartialEq + Send + Sync + Copy, D: Dimension>(
 /// * `zero_division`: What to do in case of division by zero. The most common solution is to
 ///   replace the result by 0.
 /// * `scheme`: What scheme are we using? If no scheme is provided (eg. `None`), we assume a that
-///    we are not in `strict` mode. `strict` mode is equivalent to `strict` mode in `SeqEval`:
-///    <https://github.com/chakki-works/seqeval/blob/master/README.md#usage>
+///   we are not in `strict` mode. `strict` mode is equivalent to `strict` mode in `SeqEval`:
+///   <https://github.com/chakki-works/seqeval/blob/master/README.md#usage>
 /// * `suffix`: Do we expect to have the prefix (such as "B", "I", "L", "O", "U" or "E") at the end
 ///   of the token? If so, suffix should be `true`. If the prefix is located at the start of the
 ///   token, suffix should be `false`.
@@ -815,6 +815,7 @@ mod tests {
     use enum_iterator::{all, Sequence};
     use quickcheck::{QuickCheck, TestResult};
 
+    #[allow(clippy::upper_case_acronyms)]
     #[derive(Debug, PartialEq, Hash, Clone, Sequence, Eq)]
     pub(crate) enum TokensToTest {
         BPER,

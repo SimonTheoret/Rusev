@@ -4,15 +4,15 @@ performance and soudness.
 # SCHEMES
 The current [SchemeType] are supported:
 * IOB1: Here, `I` is a token inside a chunk, `O` is a token outside a chunk and `B` is the
-    beginning of the chunk immediately following another chunk of the same named entity.
+  beginning of the chunk immediately following another chunk of the same named entity.
 * IOB2: It is same as IOB1, except that a `B` tag is given for every token, which exists at the
-    beginning of the chunk.
+  beginning of the chunk.
 * IOE1: An `E` tag used to mark the last token of a chunk immediately preceding another chunk of
-    the same named entity.
+  the same named entity.
 * IOE2: It is same as IOE1, except that an `E` tag is given for every token, which exists at the
-    end of the chunk.
+  end of the chunk.
 * BILOU/IOBES: 'E' and 'L' denotes `Last` or `Ending` character in a sequence and 'S' denotes a
-    single element  and 'U' a unit element.
+  single element  and 'U' a unit element.
 
 The BILOU and IOBES schemes are only supported in strict mode.
 
@@ -24,14 +24,15 @@ The BILOU and IOBES schemes are only supported in strict mode.
 This library partially reuses the terminology of the SeqEval library. The concepts might not be
 mapped one to one.
 * A class is an entity we are interested in, such as 'LOC' for location, 'PER' for person, 'GEO'
-    for geography, etc. It can be anything, but must be represented by a string.
+  for geography, etc. It can be anything, but must be represented by a string.
 * A token is a string containing a class, such a `GEO`, `LOC`, `PER` and a prefix. The prefix
-    indicates where we are in the current chunk. For a given scheme, the list of possible prefix are
-    the letters of the scheme, such as I-O-B or I-O-E. Prefix are limited to the letters `O`, `I`,
-    `B`, `E`, `U` and `L`. It is essential that the tokens use these prefix.
-* A chunk is list of at least one token associated with a named entity. A chunk could be `["B-PER", "I-PER", "I-PER"]` for example.
+  indicates where we are in the current chunk. For a given scheme, the list of possible prefix are
+  the letters of the scheme, such as I-O-B or I-O-E. Prefix are limited to the letters `O`, `I`,
+  `B`, `E`, `U` and `L`. It is essential that the tokens use these prefix.
+* A chunk is list of at least one token associated with a named entity. A chunk could be `["B-PER",
+  "I-PER", "I-PER"]` for example.
 * A Scheme gives us enough information to parse a list of tokens into a chunk. The `SchemeType` can
-    be used to autodetect the `Scheme` used in a given list of sequences.
+  be used to autodetect the `Scheme` used in a given list of sequences.
 
 # Example
 Here is a simple example showing how to use this library by using the `config` API (eg. [classification_report_conf]):

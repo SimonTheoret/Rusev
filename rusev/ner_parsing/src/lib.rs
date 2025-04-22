@@ -284,7 +284,7 @@ impl<'a> Tokens<'a> {
     ///
     /// * `start`: Indexing at which we are starting to look for a token not inside.
     /// * `prev`: Previous token. This token is necessary to know if the token at index `start` is
-    ///    inside or not.
+    ///   inside or not.
     #[inline(always)]
     fn forward(&self, start: usize, prev: &Token<'a>) -> usize {
         let slice_of_interest = &self.extended_tokens()[start..];
@@ -394,9 +394,9 @@ where
     /// function will result in UB.
     ///
     /// * `tokens`: The tokens. The current and previous tokens are
-    ///    extracted from its extended_tokens field.
+    ///   extracted from its extended_tokens field.
     /// * `index`: Index specifying the current token. `index-1` is
-    ///    used to take the previous token if index!=1.
+    ///   used to take the previous token if index!=1.
     #[inline(always)]
     unsafe fn take_out_pair(
         tokens: &'b mut Tokens<'a>,
@@ -461,17 +461,6 @@ pub enum ConversionError<S: AsRef<str>> {
     /// Could not parse the string into a `Prefix`
     ParsingPrefix(ParsingError<S>),
 }
-
-// impl ConversionError<&str> {
-//     pub(crate) fn to_string(self) -> ConversionError<String> {
-//         match self {
-//             Self::InvalidToken(t) => Self::InvalidToken(t),
-//             Self::ParsingPrefix(ParsingPrefixError(ref_str)) => {
-//                 Self::ParsingPrefix(ParsingPrefixError(ref_str.to_string()))
-//             }
-//         }
-//     }
-// }
 
 impl<S: AsRef<str>> From<InvalidToken> for ConversionError<S> {
     fn from(value: InvalidToken) -> Self {
@@ -557,12 +546,12 @@ pub fn get_entities_strict<'a>(
 /// malformed token in `tokens`.
 /// * `tokens`: Vector containing the raw tokens.
 /// * `scheme`: The scheme type to use (ex: IOB2, BILOU, etc.). The
-///    supported scheme are the variant of SchemeType.
+///   supported scheme are the variant of SchemeType.
 /// * `suffix`: Set it to `true` if the Tag is located at the start of
-///    the token and set it to `false` if the Tag is located at the
-///    end of the token.
+///   the token and set it to `false` if the Tag is located at the
+///   end of the token.
 /// * ` `: The character used separate the Tag from the Prefix
-///    (ex: `I-PER`, where the tag is `PER` and the prefix is `I`)
+///   (ex: `I-PER`, where the tag is `PER` and the prefix is `I`)
 impl<'a> TryFrom<(&'a mut FlatArray<&'a str>, SchemeType, bool)> for Entities<'a> {
     type Error = ConversionError<String>;
     fn try_from(

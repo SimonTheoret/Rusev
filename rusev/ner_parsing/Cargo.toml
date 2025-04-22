@@ -7,6 +7,7 @@ description = "Named entity parser. Used in Rusev to parse a list of tokens into
 repository = "https://github.com/SimonTheoret/named_entity_parsing"
 keywords = ["SeqEval", "NLP", "NER"]
 categories = ["science", "text-processing"]
+rust-version = "1.81" #MSRV
 
 [lib]
 
