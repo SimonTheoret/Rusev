@@ -24,7 +24,7 @@ license = "MIT"
 repository = "https://github.com/SimonTheoret/rusev"
 keywords = ["ML", "SeqEval", "Metrics", "NLP", "NER"]
 categories = ["science", "text-processing", "mathematics"]
-rust-version = "1.80.1" #MSRV
+rust-version = "1.81" #MSRV
 
 [lib]
 

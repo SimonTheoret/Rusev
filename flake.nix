@@ -30,6 +30,7 @@
                 rustfmt
                 rust-analyzer
                 cargo-expand
+                cargo-msrv
                 cargo
                 clippy
                 python313Full
